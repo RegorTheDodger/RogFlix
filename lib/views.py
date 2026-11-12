@@ -440,31 +440,47 @@ def settings_page(top_lang):
 
 def watch_page(item, top_lang):
     meta = " &middot; ".join(esc(b) for b in (item.get("year"), item.get("lang")) if b)
+    media = item.get("url") or ""
+
+    # A signed url can come back empty: the film may be gone, or einthusan may
+    # be refusing to sign. An empty player frame is worse than saying so.
+    if media:
+        stage = ('<div class="player-wrap"><div class="player">'
+                 '<video id="player" controls preload="metadata" playsinline>'
+                 '<source src="%s" type="video/mp4">'
+                 "Your browser cannot play this file."
+                 "</video></div></div>" % esc(media))
+        open_link = ('<a class="btn ghost" href="%s" target="_blank"'
+                     ' rel="noopener noreferrer">Open in new tab</a>'
+                     % esc(media))
+    else:
+        stage = ('<div class="player-wrap"><div class="player is-empty">'
+                 '<p class="play-note">einthusan is not handing out a stream for '
+                 'this film just now. It may have been taken down, or the site '
+                 'may be between signings — try again in a minute.</p>'
+                 "</div></div>")
+        open_link = ""
+
     return (item["title"],
             '<article class="watch" data-id="%s" data-title="%s" data-cover="%s"'
             ' data-url="%s" data-year="%s">'
             '<div class="watch-top"><a class="back" href="/">Back to home</a></div>'
-            '<div class="player-wrap"><div class="player">'
-            '<video id="player" controls preload="metadata" playsinline>'
-            '<source src="%s" type="video/mp4">'
-            "Your browser cannot play this file."
-            "</video></div></div>"
+            '%s'
             '<div class="watch-meta">'
             "<div><h1>%s</h1>%s</div>"
             '<div class="watch-actions">'
             '<button class="btn ghost watch-add" type="button" data-action="toggle">'
             '<span class="add-off">%s<span>My List</span></span>'
             '<span class="add-on">%s<span>In My List</span></span></button>'
-            '<a class="btn ghost" href="%s" target="_blank" rel="noopener noreferrer">'
-            'Open in new tab</a>'
+            "%s"
             "</div></div>"
             '<p class="resume" data-role="resume"></p>'
             "</article>"
             % (esc(item["id"]), esc(item["title"]), esc(item.get("cover") or ""),
-               esc(item["url"]), esc(item.get("year", "")),
-               esc(item["url"]), esc(item["title"]),
+               esc(media), esc(item.get("year", "")), stage,
+               esc(item["title"]),
                ('<p class="watch-sub">%s</p>' % meta) if meta else "",
-               ICON_PLUS, ICON_CHECK, esc(item["url"])),
+               ICON_PLUS, ICON_CHECK, open_link),
             top_lang)
 
 
@@ -476,7 +492,7 @@ def convert_page(raw, movie_id, ok, ctype, error):
                 % (esc(error), search_field()), "tamil")
 
     item = {"id": movie_id, "title": "id %s" % movie_id, "year": "", "lang": "",
-            "cover": None, "url": E.cdn_link(movie_id)}
+            "cover": None, "url": E.watch_link(movie_id)}
 
     if ok is None:
         badge = ""

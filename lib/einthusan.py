@@ -7,6 +7,7 @@ and the Vercel function can use it, and so it can be tested on its own.
 
 import difflib
 import gzip
+import html
 import http.client
 import re
 import ssl
@@ -19,10 +20,28 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 HOST = "einthusan.tv"
+# Artwork and stills are still served unsigned off cdn2; only the films moved.
 CDN_HOST = "cdn2.einthusan.io"
 COVER_BASE = "https://%s/etv/s3/moviecovers/" % CDN_HOST
 
-CDN = "https://%s/etv/content/D{}.mp4" % CDN_HOST
+# Films are signed now. The watch page writes a media url of the shape
+#   /etv/content/D<id>.mp4?e=<epoch>&md5=<signature>
+# with an expiry six hours out. Drop the query, change the path, tamper with
+# the hash or let it age and the CDN answers 404, not 403. The page writes the
+# host as a dotted quad that does not resolve; the Stremio addon at
+# github.com/asaddon/EinthusanTV swaps that for cdn1, which is also the host
+# that serves the bytes when the page's own host is left out. So the path and
+# its query are lifted from the page and only the host is ours.
+MEDIA_HOST = "https://cdn1.einthusan.io"
+# A film never outlasts its link, so one page fetch covers a whole viewing and
+# a revisit inside the window costs nothing. Refreshed well before expiry.
+MEDIA_TTL = 2 * 60 * 60
+MEDIA_MARGIN = 15 * 60
+
+# What a card carries is this app's own player page. The media url behind it is
+# signed and expires, so it is resolved when the page is opened rather than
+# being baked into every card, list entry and synced state.
+WATCH = "/watch/{}"
 
 LANGS = [
     ("tamil", "Tamil"),
@@ -190,7 +209,7 @@ def parse_results_page(doc):
             "year": meta.group(1) if meta else "",
             "lang": collapse(strip_tags(meta.group(2))) if meta else "",
             "cover": COVER_BASE + cover.group(1) + ".jpg" if cover else None,
-            "url": CDN.format(mid.group(1)),
+            "url": WATCH.format(mid.group(1)),
         })
 
     pages_m = re.search(r"Page\s+\d+\s+of\s+(\d+)", doc)
@@ -482,7 +501,7 @@ def _featured_entry(head, tail):
         "imdb": imdb.group(1) if imdb else "",
         "trailer": trailer.group(1) if trailer else "",
         "cast": cast,
-        "url": CDN.format(mid.group(1)),
+        "url": WATCH.format(mid.group(1)),
     }
 
 
@@ -500,7 +519,7 @@ def _showcase_items(view):
             "cover": COVER_BASE + cover.group(1) + ".jpg" if cover else None,
             "year": "",
             "lang": "",
-            "url": CDN.format(mid.group(1)),
+            "url": WATCH.format(mid.group(1)),
         })
     return items
 
@@ -570,5 +589,79 @@ def extract_id(raw):
     return text if _BARE.match(text) else None
 
 
-def cdn_link(movie_id):
-    return CDN.format(movie_id)
+def watch_link(movie_id):
+    """The page in this app that resolves and plays a film."""
+    return WATCH.format(movie_id)
+
+
+# --------------------------------------------------------------------------
+# streams
+# --------------------------------------------------------------------------
+
+_SIGNED = re.compile(r'data-mp4-link="([^"]+)"')
+_PLAYER_TITLE = re.compile(r'data-content-title="([^"]*)"')
+_EXPIRY = re.compile(r"(?:^|&)e=(\d+)")
+_DECOY_HOST = re.compile(r"^(?:https?:)?//(?:\d{1,3}\.){3}\d{1,3}")
+
+_media_cache = {}
+
+
+def parse_stream(doc):
+    """{url, title, expires} out of a watch page, or None for a dead id.
+
+    A removed film is answered with a redirect to /contentnotfound/, which has
+    no player element at all, so a missing attribute is the whole test for
+    "playable". The page also lists an HLS playlist; that one only validates on
+    its own host and a plain <video> cannot use it, so only the mp4 is taken.
+    """
+    found = _SIGNED.search(doc)
+    if not found:
+        return None
+
+    raw = _DECOY_HOST.sub("", html.unescape(found.group(1)))
+    parts = urllib.parse.urlsplit(raw)
+    if not parts.path.startswith("/etv/content/") or not parts.query:
+        return None
+
+    expiry = _EXPIRY.search(parts.query)
+    title = _PLAYER_TITLE.search(doc)
+    return {
+        "url": MEDIA_HOST + parts.path + "?" + parts.query,
+        "title": collapse(html.unescape(title.group(1))) if title else "",
+        "expires": int(expiry.group(1)) if expiry else 0,
+    }
+
+
+def stream(movie_id):
+    """The signed media url for one film, or None when there is none.
+
+    Cached per process until shortly before einthusan's own expiry. When the
+    page cannot be fetched at all a link that is still valid is served instead,
+    because an entry one fetch old beats a player with nothing in it.
+    """
+    movie_id = (movie_id or "").strip()
+    if not movie_id:
+        return None
+
+    now = time.time()
+    with _cache_lock:
+        hit = _media_cache.get(movie_id)
+    if hit and now - hit["fetched"] < MEDIA_TTL and \
+            hit["expires"] - now > MEDIA_MARGIN:
+        return hit
+
+    try:
+        got = parse_stream(http_get("/movie/watch/%s/" %
+                                    urllib.parse.quote(movie_id, safe="")))
+    except Exception:
+        got = None
+
+    if not got:
+        return hit if hit and hit["expires"] > now + 60 else None
+
+    got["fetched"] = now
+    with _cache_lock:
+        if len(_media_cache) > 512:
+            _media_cache.clear()
+        _media_cache[movie_id] = got
+    return got

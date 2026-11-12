@@ -15,7 +15,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from flask import Flask, Response, jsonify, redirect, request
 
@@ -156,13 +156,17 @@ def create_app():
     @app.route("/watch/<movie_id>")
     def watch(movie_id):
         movie_id = E.extract_id(movie_id) or movie_id
+        # einthusan signs the media url per page view and it dies six hours
+        # later, so it is fetched here, for this page, and not stored anywhere.
+        media = E.stream(movie_id) or {}
         item = {
             "id": movie_id,
-            "title": (request.args.get("t") or movie_id)[:120],
+            "title": (request.args.get("t") or media.get("title")
+                      or movie_id)[:120],
             "cover": request.args.get("c") or None,
             "year": request.args.get("y") or "",
             "lang": request.args.get("l") or "",
-            "url": E.cdn_link(movie_id),
+            "url": media.get("url") or "",
         }
         _n, body, _l = views.watch_page(item, top_lang())
         return render(item["title"], body)
@@ -358,12 +362,22 @@ def create_app():
 
 
 def _verify(movie_id):
+    """Range-probe the media url einthusan has just signed for this film.
+
+    The unsigned /etv/content/D<id>.mp4 this used to check now answers 404 for
+    every film, so the probe has to follow the player and use the signed url.
+    """
     import http.client
     import ssl as ssl_mod
-    conn = http.client.HTTPSConnection(E.CDN_HOST, timeout=20,
+
+    media = E.stream(movie_id)
+    if not media:
+        return False, ""
+    parts = urlsplit(media["url"])
+    conn = http.client.HTTPSConnection(parts.hostname, timeout=20,
                                        context=ssl_mod.create_default_context())
     try:
-        conn.request("GET", "/etv/content/D%s.mp4" % movie_id,
+        conn.request("GET", parts.path + "?" + parts.query,
                      headers={"User-Agent": E.UA, "Range": "bytes=0-255",
                               "Connection": "close"})
         resp = conn.getresponse()

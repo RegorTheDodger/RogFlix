@@ -140,14 +140,15 @@ Total state is capped at 400 KB. `IML_ALLOW_SIGNUP` decides who may register:
 ### Convert
 
 `/convert?u=` pulls the 4-character id out of an einthusan link (or accepts the
-id on its own) and builds the player page. `&check=1` reads the first 256 bytes
-of the CDN file to confirm it is really there and reports the content type.
+id on its own) and builds the player page. `&check=1` resolves the signed media
+url, reads its first 256 bytes to confirm the film is really there, and reports
+the content type.
 
 ## Playback sources
 
 | Catalogue | Page | Player | URL shape |
 | --- | --- | --- | --- |
-| einthusan | `/watch/<id>` | native `<video>` | `https://cdn2.einthusan.io/etv/content/D<id>.mp4` |
+| einthusan | `/watch/<id>` | native `<video>` | `https://cdn1.einthusan.io/etv/content/D<id>.mp4?e=<epoch>&md5=<signature>` |
 | English (Cinemeta) | `/title/<kind>/<id>` | VidSpark iframe | `https://vidspark.to/movie/tt0413300`, `https://vidspark.to/tv/tt0944947/2/3` |
 
 Nothing is downloaded, converted or proxied: the server only builds the URL. That
@@ -155,6 +156,31 @@ is what lets playback work on Vercel, where a function cannot carry a two-hour
 file. The trade is that VidSpark is somebody else's player, so its quality,
 subtitles and ads apply. A series opens on its first real season — season 0 is
 the specials list, which VidSpark has no episode for.
+
+### The einthusan url is signed
+
+einthusan stopped serving `cdn2.einthusan.io/etv/content/D<id>.mp4`; that
+address is a plain 404 now. Every watch page carries a signed url instead,
+good for six hours:
+
+```
+/etv/content/D<id>.mp4?e=1794496140&md5=LYB3Asm-YLQSM5qWIDskmQ
+```
+
+`e` is the expiry as a Unix stamp, exactly six hours after the page was built.
+`md5` is the signature the CDN checks; a missing, altered or aged one is a 404.
+It cannot be computed here because the secret lives on their side, so it has to
+be lifted from the page. The host in that markup is a dotted quad that does not
+resolve, so `lib/einthusan.py` keeps the path and query and puts
+`cdn1.einthusan.io` in front — the same substitution the Stremio addon
+(`github.com/asaddon/EinthusanTV`) makes.
+
+So `/watch/<id>` fetches the watch page, parses `data-mp4-link` out of
+`#UIVideoPlayer`, and caches the result per process for two hours, keyed by id
+and always refreshed before the signature expires. Cards never carry the media
+url — they point at `/watch/<id>`, which resolves a fresh one for that page
+view. The cache is per instance and nothing outlives a request, so this behaves
+the same on Vercel as on the Mac.
 
 ## Running it
 
