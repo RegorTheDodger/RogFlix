@@ -150,7 +150,7 @@ def page(title, body, top_lang="english"):
         "</head><body>"
         '<header class="nav" id="bar"><div class="nav-inner">'
         '<a class="brand" href="/" aria-label="RogFlix home">'
-        '<img class="brand-mark" src="/static/icon-192.png" alt="" width="28"'
+        '<img class="brand-mark" src="/static/mark.png" alt="" width="28"'
         ' height="28"><span class="brand-word">Rog<em>Flix</em></span>'
         '<span class="brand-tag">Every service</span></a>'
         '<nav class="nav-links">%s</nav>'
