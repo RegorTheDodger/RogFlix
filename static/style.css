@@ -1548,8 +1548,9 @@ select option { background: var(--ink-2); color: var(--paper); }
 }
 .episode {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: 124px minmax(0, 1fr);
   gap: 18px;
+  align-items: start;
   padding: 18px 4px;
   border-top: 1px solid var(--line);
   transition: background var(--ease);
@@ -1557,15 +1558,36 @@ select option { background: var(--ink-2); color: var(--paper); }
 .episode:hover { background: rgba(245, 237, 227, .025); }
 .episode:last-child { border-bottom: 1px solid var(--line); }
 
+.ep-thumb {
+  display: block;
+  width: 124px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: rgba(245, 237, 227, .04);
+}
+.ep-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ep-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
 .ep-no {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: .1em;
   color: var(--saffron);
-  padding-top: 4px;
 }
-.ep-body { min-width: 0; }
 .ep-name {
+  display: block;
   margin: 0;
   font-family: var(--font-display);
   font-optical-sizing: auto;
@@ -1576,18 +1598,12 @@ select option { background: var(--ink-2); color: var(--paper); }
 }
 .ep-name a:hover { color: var(--saffron); }
 .ep-overview {
-  margin: 7px 0 0;
+  display: block;
+  margin: 0;
   max-width: 72ch;
   font-size: 13.5px;
   line-height: 1.6;
   color: var(--paper-dim);
-}
-.ep-thumb {
-  width: 124px;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--line);
 }
 
 /* ---------------------------------------------------------------- settings */
@@ -1775,7 +1791,7 @@ select option { background: var(--ink-2); color: var(--paper); }
   .shelf-head::after { display: none; }
   .watch-meta { flex-direction: column; }
   .facts, .side-facts { grid-template-columns: 76px minmax(0, 1fr); }
-  .episode { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; }
+  .episode { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .ep-thumb { display: none; }
   .search-field { flex-wrap: wrap; border-radius: var(--r-lg); }
   .search-field select { border-left: 0; }
