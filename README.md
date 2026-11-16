@@ -21,11 +21,14 @@ carries. That is why a card can open its own page without a lookup, and why a
 film's poster, backdrop, cast, runtime, rating, trailer and episode list all
 arrive together.
 
-**Watching.** A title page carries the VidSpark embed for that IMDb id — a film
-at `/movie/<id>`, an episode at `/tv/<id>/<season>/<episode>`. The frame is
-covered by the film's poster until you press play, because the player paints a
-white page while it boots. A series opens on its first real season; season 0 is
-the specials list, which has no episode to play.
+**Watching.** A title page carries the CineSrc embed, which is keyed by TMDB
+id — a film at `/embed/movie/<tmdb>`, an episode at
+`/embed/tv/<tmdb>?s=<season>&e=<episode>`. Cinemeta returns that id with every
+title, so the page never has to guess one. The frame is covered by the poster
+until you press play. A series opens on its first real season; season 0 is the
+specials list, which has no episode to play. When a series rolls into its next
+episode inside the player, the page follows it: the address bar, the resume
+point and the watch time all move to the episode now playing.
 
 **Search.** The search box queries Cinemeta across the whole library, and keeps
 only titles that resemble what was typed — punctuation and spacing ignored, so
@@ -80,7 +83,7 @@ and they share no catalogue and no account database.
 | --- | --- | --- |
 | Library | Everything the big streaming services carry, across 35 services | South Asian cinema only — eight Indian languages |
 | Where titles come from | Streaming Catalogs (Stremio) rows, metadata from Cinemeta | einthusan's language indexes |
-| Playback | VidSpark embed by IMDb id | einthusan's signed mp4 in a native player |
+| Playback | CineSrc embed by TMDB id | einthusan's signed mp4 in a native player |
 | Browsing | One row per service, plus popular films and shows on search | Language tabs, Most Watched, Staff Picks, Recently Added |
 | Search | Full-library search by title | Prefix search inside one language |
 | Best for | Finding a specific film or show from Netflix, Prime Video, JioHotstar, Disney+, HBO Max, Zee5 and the rest | Finding a Tamil, Telugu, Malayalam, Kannada, Hindi, Bengali, Marathi or Punjabi film |
