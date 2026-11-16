@@ -172,6 +172,7 @@ def normalise(raw, kind=None):
         "genres": raw.get("genre") or raw.get("genres") or [],
         "cast": raw.get("cast") or [],
         "popularity": popularity,
+        "tmdb": str(raw.get("moviedb_id") or ""),
     }
 
 
@@ -382,6 +383,7 @@ def meta(kind, media_id):
         "trailer": trailer,
         "imdb": ("https://www.imdb.com/title/%s/" % imdb_id) if imdb_id else "",
         "videos": _videos(raw.get("videos")),
+        "tmdb": str(raw.get("moviedb_id") or item.get("tmdb") or ""),
         "year_label": str(raw.get("year") or item["year"]),
     })
     return item

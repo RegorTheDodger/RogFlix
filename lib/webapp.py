@@ -229,7 +229,7 @@ def create_app():
         seasons, by_season = [], {}
         if kind == "series":
             seasons = stremio.seasons(item) or [1]
-            # Season 0 is the specials list, and VidSpark has no episode to
+            # Season 0 is the specials list, and CineSrc has no episode to
             # play there. A show opened without ?s= therefore starts on its
             # first real season instead of on a page with no player at all.
             first = next((value for value in seasons if value > 0), seasons[0])

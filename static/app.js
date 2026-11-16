@@ -556,35 +556,45 @@ function wirePlayer() {
 
 /* ------------------------------------------------------------- player frame */
 
-/* VidSpark is another origin, but a talkative one: it posts playback events
- * tagged source:"vidspark-player". Listening to them keeps our own resume
- * position, watch time and "finished" state working exactly as they do for the
- * Einthusan <video>, and the account sync carries them to the other clients.
+/* CineSrc is another origin, but a talkative one: it posts `cinesrc:*` events
+ * (ready, play, pause, timeupdate, seeked, ended, error, nextepisode) over
+ * postMessage. Listening to them keeps our own resume position, watch time and
+ * "finished" state working exactly as they do for the Einthusan <video>, and
+ * the account sync carries them to the other devices.
  *
- * On open the frame is handed our saved second with ?t=, which the player
- * documents as taking priority over whatever it remembered itself. */
-function wireVidspark() {
-  const frame = document.querySelector("iframe[data-vidspark]");
+ * On open the frame is handed our saved second with ?t= and
+ * continueprompt=false, which is the documented way to make it open exactly
+ * where this site says, without a second Continue/Restart prompt on top of the
+ * note printed below the player.
+ *
+ * A series can move on to its next episode inside the frame. The page follows
+ * that move rather than reloading the player: the address bar, the saved
+ * position and the watch time all switch to the episode now playing. */
+const CINESRC_ORIGIN = "https://cinesrc.st";
+
+function wireCineSrc() {
+  const frame = document.querySelector("iframe[data-cinesrc]");
   const article = frame && frame.closest("[data-id]");
   if (!frame || !article) return;
 
-  const id = article.dataset.id;
-  const meta = {
+  let id = article.dataset.id;
+  let meta = {
     id: id,
     title: article.dataset.title,
     cover: article.dataset.cover,
-    url: frame.dataset.vidspark,
+    url: frame.dataset.cinesrc,
     href: article.dataset.href || location.pathname,
     year: article.dataset.year
   };
 
   paint();
 
-  const base = frame.dataset.vidspark;
+  const base = frame.dataset.cinesrc;
   const saved = getProgress()[id];
   if (base && saved && saved.seconds && saved.seconds > MIN_SECONDS) {
     const at = Math.floor(saved.seconds);
-    frame.src = base + (base.indexOf("?") === -1 ? "?" : "&") + "t=" + at;
+    frame.src = base + (base.indexOf("?") === -1 ? "?" : "&") +
+      "t=" + at + "&continueprompt=false";
     const note = document.querySelector('[data-role="resume"]');
     if (note) {
       note.textContent =
@@ -617,8 +627,7 @@ function wireVidspark() {
   }
 
   /* One report. The position moving is the only reliable sign of playback: a
-   * paused player does not advance, whichever event carried the number, so
-   * the event name and the paused flag are not worth trusting over it. */
+   * paused player does not advance, whichever event carried the number. */
   function tick(now, duration) {
     const delta = now - lastTick;
     if (delta > 0 && delta <= SEEK_LIMIT) {
@@ -629,70 +638,98 @@ function wireVidspark() {
     logTime(now, duration);
   }
 
+  /* The player rolled into another episode inside the frame. Point this page
+   * at the episode that is actually playing, so a refresh reopens it and the
+   * position is filed against the right one. */
+  function followEpisode(season, episode) {
+    season = Number(season) || 0;
+    episode = Number(episode) || 0;
+    if (!season || !episode) return;
+    const parts = id.split(":");
+    if (parts[0] !== "ext" || parts[1] !== "series" || parts.length < 5) return;
+    const next = parts.slice(0, 3).join(":") + ":" + season + ":" + episode;
+    if (next === id) return;
+    id = next;
+    meta = Object.assign({}, meta, {
+      id: id,
+      href: (meta.href || location.pathname).split("?")[0] +
+        "?s=" + season + "&e=" + episode
+    });
+    try {
+      history.replaceState(null, "", meta.href);
+    } catch (e) {
+      /* nothing to update on a page opened from disk */
+    }
+    /* the clock restarts with the new episode: the old one's last second must
+     * not be read as a jump when this one begins at 0:00 */
+    lastTick = 0;
+    lastSave = 0;
+    lastKnown = null;
+    played = 0;
+    const note = document.querySelector('[data-role="resume"]');
+    if (note) {
+      note.textContent = "Now playing season " + season +
+        ", episode " + episode + ".";
+    }
+  }
+
+  function failed() {
+    const note = document.querySelector(".play-note");
+    if (note) {
+      note.textContent = "CineSrc could not start this stream. " +
+        "Try another title, or reload the page.";
+    }
+  }
+
   window.addEventListener("message", function (event) {
     /* the frame we put on the page, and only its own tagged traffic */
+    if (event.origin !== CINESRC_ORIGIN) return;
     if (event.source !== frame.contentWindow) return;
     const data = event.data;
-    if (!data || data.source !== "vidspark-player") return;
+    if (!data || typeof data.type !== "string") return;
+    if (data.type.indexOf("cinesrc:") !== 0) return;
 
     const now = Number(data.currentTime) || 0;
     const duration = Number(data.duration) || 0;
 
-    if (data.event === "ended") {
-      markFinished(id, meta);
-      paint();
-      syncAccount();
-      return;
-    }
-
-    if (data.event === "play" || data.event === "seeked") {
-      lastTick = now;
-      lastSave = 0;
-      logTime(now, duration);
-      return;
-    }
-
-    if (data.event === "pause") {
-      lastSave = 0;
-      tick(now, duration);
-      return;
-    }
-
-    if (data.event === "timeupdate" || data.event === "playerstatus") {
-      tick(now, duration);
+    switch (data.type) {
+      case "cinesrc:ended":
+        markFinished(id, meta);
+        paint();
+        syncAccount();
+        return;
+      case "cinesrc:nextepisode":
+        followEpisode(data.season, data.episode);
+        return;
+      case "cinesrc:error":
+        failed();
+        return;
+      case "cinesrc:play":
+      case "cinesrc:seeked":
+        lastTick = now;
+        lastSave = 0;
+        logTime(now, duration);
+        return;
+      case "cinesrc:pause":
+        lastSave = 0;
+        tick(now, duration);
+        return;
+      case "cinesrc:seeking":
+        /* the jump itself is not watching; the next tick starts from here */
+        lastTick = now;
+        lastKnown = { now: now, duration: duration };
+        return;
+      case "cinesrc:timeupdate":
+        tick(now, duration);
+        return;
+      default:
+        return;
     }
   });
-
-  /* The frame cannot be trusted to announce playback on its own: watching it
-   * live, a session nobody touches can go completely quiet, which is how a
-   * show ended up logged once at 0:00 and never again. getStatus is the
-   * documented way to ask, and its reply is a playerstatus the handler above
-   * already reads, so asking on a timer is what makes a plain watch count. */
-  let poll = 0;
-  function ask() {
-    if (document.visibilityState && document.visibilityState !== "visible") return;
-    try {
-      frame.contentWindow.postMessage({ action: "getStatus" }, "*");
-    } catch (e) {
-      /* the frame went away */
-    }
-  }
-  function startPoll() {
-    if (!poll) poll = window.setInterval(ask, 2500);
-    ask();
-  }
-  startPoll();
-  window.addEventListener("load", startPoll);
-  window.addEventListener("pageshow", startPoll);
-  frame.addEventListener("load", ask);
 
   /* Most sessions end by closing the tab, not by pressing pause, so the last
    * position the player told us about is written on the way out. */
   window.addEventListener("pagehide", function () {
-    if (poll) {
-      window.clearInterval(poll);
-      poll = 0;
-    }
     if (!lastKnown || played < MIN_WATCH) return;
     setResume(id, lastKnown.now, lastKnown.duration, meta);
     syncAccount();
@@ -931,8 +968,8 @@ document.querySelectorAll('.search-field input[name="q"]').forEach((input) => {
   if (btn) btn.hidden = !input.value;
 });
 
-/* The VidSpark frame is covered by a poster until it is asked for, so its own
- * white boot screen never lands on the page. */
+/* The CineSrc frame is covered by a poster until it is asked for, so a
+ * half-painted player never lands on the page. */
 document.addEventListener("click", function (event) {
   const gate = event.target.closest('[data-action="reveal-embed"]');
   if (!gate) return;
@@ -945,7 +982,7 @@ paint();
 wireAuth();
 syncAccount();
 wirePlayer();
-wireVidspark();
+wireCineSrc();
 wireRails();
 wireBar();
 window.addEventListener("pageshow", () => {
