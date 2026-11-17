@@ -110,7 +110,12 @@ def catalog(kind, catalog_id, service=""):
 
 
 def rows(limit=16):
-    """Eight rails, fetched at once; one slow service costs its own row."""
+    """Eight rails, fetched at once; one slow service costs its own row.
+
+    Each row keeps an id of its own (service and type, not its position) so
+    somebody can reorder or hide rows on /settings without the ids shifting
+    when a service happens to return nothing that day.
+    """
     out = []
     pool = ThreadPoolExecutor(max_workers=len(ROWS))
     try:
@@ -122,15 +127,15 @@ def rows(limit=16):
             except Exception:
                 items = []
             if items:
-                out.append((name, items[:limit]))
+                out.append(("%s-%s" % (kind, cid), name, items[:limit]))
     finally:
         pool.shutdown(wait=False)
     return out
 
 
 def featured(rows_data):
-    for _name, items in rows_data:
+    for _key, _name, items in rows_data:
         for item in items:
             if item.get("background") and item.get("rating"):
                 return item
-    return rows_data[0][1][0] if rows_data and rows_data[0][1] else None
+    return rows_data[0][2][0] if rows_data and rows_data[0][2] else None

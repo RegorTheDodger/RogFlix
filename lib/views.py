@@ -205,7 +205,7 @@ def shelf(title, shelf_id, items_html="", empty_text="", note="",
         head += '<p class="shelf-note">%s</p>' % esc(note)
     head += head_extra
     return (
-        '<section class="shelf">'
+        '<section class="shelf" data-row="%s">'
         '<div class="shelf-head">%s</div>'
         '<div class="rail-wrap">'
         '<div class="rail" data-shelf="%s" tabindex="0" aria-label="%s">%s</div>'
@@ -216,8 +216,9 @@ def shelf(title, shelf_id, items_html="", empty_text="", note="",
         "</div>"
         '<p class="empty" data-empty="%s"%s>%s</p>'
         "</section>"
-        % (head, esc(shelf_id), esc(title), items_html, ICON_PREV, ICON_NEXT,
-           esc(shelf_id), "" if empty_text else " hidden", esc(empty_text))
+        % (esc(shelf_id), head, esc(shelf_id), esc(title), items_html,
+           ICON_PREV, ICON_NEXT, esc(shelf_id),
+           "" if empty_text else " hidden", esc(empty_text))
     )
 
 
@@ -587,22 +588,23 @@ def home_page():
     hero_item = catalog.featured(rails_data) if rails_data else None
     hero = billboard_item(hero_item) if hero_item else billboard_fallback()
 
-    rails = [shelf(name, "catalog-%d" % index,
+    rails = [shelf(name, "catalog-%s" % key,
                    "".join(library_card(one) for one in items))
-             for index, (name, items) in enumerate(rails_data)]
+             for key, name, items in rails_data]
 
+    # What somebody saved and what they are part-way through comes first: the
+    # catalogue is the shop window, these two are the shelf at home.
     return ("Home",
             '<div class="bb-host" data-billboard>%s</div>'
-            '%s%s%s%s'
+            '<div class="rows" data-rows>%s%s%s</div>'
             % (hero,
-               "".join(rails[:2]),
                shelf("Continue watching", "continue",
                      empty_text="Nothing part-watched yet. Start a film and "
                                 "it shows up here.",
                      head_extra=continue_head_actions()),
                shelf("My list", "watchlist",
                      empty_text="Nothing saved yet. Use the + on any poster."),
-               "".join(rails[2:])),
+               "".join(rails)),
             "english")
 
 
@@ -649,6 +651,38 @@ def search_page(query, items=(), movies=(), series=(), failed=False):
     return ("Search", "".join(body), "english")
 
 
+PERSONAL_ROWS = [("continue", "Continue watching"), ("watchlist", "My list")]
+
+
+def home_rows():
+    """Every row the home page can show, in its shipped order."""
+    return PERSONAL_ROWS + [("catalog-%s-%s" % (kind, cid), name)
+                            for kind, cid, name in catalog.ROWS]
+
+
+def rows_panel():
+    """Pick the rows and their order; the home page applies it on load."""
+    items = "".join(
+        '<li class="row-item" data-row-id="%s" data-row-title="%s">'
+        '<label class="row-toggle"><input type="checkbox" checked>'
+        '<span>%s</span></label>'
+        '<span class="row-move">'
+        '<button class="btn ghost tiny" type="button" data-move="-1"'
+        ' aria-label="Move %s up">&uarr;</button>'
+        '<button class="btn ghost tiny" type="button" data-move="1"'
+        ' aria-label="Move %s down">&darr;</button></span></li>'
+        % (esc(key), esc(name), esc(name), esc(name), esc(name))
+        for key, name in home_rows())
+    return (
+        '<section class="panel rows-panel" data-rows-panel>'
+        '<h2>Home page rows</h2>'
+        '<p class="panel-note">Choose which rows the home page shows and in '
+        'which order. Kept in this browser, next to your list.</p>'
+        '<ol class="row-list" data-row-list>%s</ol>'
+        '<button class="btn ghost tiny" type="button" data-rows-reset>'
+        'Reset to default</button></section>' % items)
+
+
 def settings_page(top_lang="english"):
     return ("Settings",
             '<section class="page-head">'
@@ -679,6 +713,7 @@ def settings_page(top_lang="english"):
             '<button class="btn ghost" type="submit">Log out</button></form>'
             '<p class="panel-note">Your list stays local until you log in; '
             "the browser syncs it after authentication.</p></section>"
+            + rows_panel() +
             '<section class="panel"><h2>Stored data</h2>'
             '<p class="panel-note">Erase this browser\'s local list, watch time '
             "and resume positions.</p>"
