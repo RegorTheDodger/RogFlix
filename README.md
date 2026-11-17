@@ -35,6 +35,10 @@ only titles that resemble what was typed — punctuation and spacing ignored, so
 "spiderman 3" finds *Spider-Man 3*. With no query the page shows popular films
 and shows instead of an empty form.
 
+**Home rows.** The home page opens with Continue watching and My list, then
+the service rows. Settings → Home page rows picks which of them appear and in
+what order, and the choice is kept in this browser.
+
 **My List.** The + on any poster saves the title locally, instantly, with no
 account needed. A show is saved as the show, not as whichever episode was open.
 Removing one writes a timestamped tombstone so a stale device cannot bring it
