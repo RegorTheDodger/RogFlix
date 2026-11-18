@@ -345,8 +345,9 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 - Watch ten seconds and the title appears under Continue watching.
 - In `/settings`, under **Home page rows**, untick a row or move it with the
   arrows; the home page follows on the next load.
-- **Colour** in `/settings` picks one of fifteen accents for the whole site,
-  kept in the browser.
+- **Colour** in `/settings` picks one of fifteen palettes for the whole site —
+  the accent, and the room it sits in (inks, paper, hairlines, scrims) are all
+  mixed from it — kept in the browser.
 - **Carousel speed** in `/settings` sets how long each film in the hero holds —
   ten seconds unless you change it; the countdown bar follows the number.
 - Sign in and the next visit merges this browser's list with the account's.
