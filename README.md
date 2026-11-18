@@ -199,7 +199,7 @@ title for the hero. Row ids are service-based (`catalog-movie-nfx`) rather than
 positional, so settings can hide or reorder them safely.
 
 **`lib/cinesrc.py`** — the player. Turns a TMDB id and an optional season/episode
-into a CineSrc embed URL, adding the site's accent colour, the seek-button
+into a CineSrc embed URL, adding the default accent colour, the seek-button
 length, and — when resuming — `t` and `continueprompt=false` so the frame opens
 where the page says without a second prompt.
 
@@ -220,7 +220,8 @@ file that knows a database dialect.
 
 **`static/app.js`** — the browser side: localStorage for My List, resume points
 and watch time, painting those shelves, the CineSrc `postMessage` bridge (play,
-pause, timeupdate, ended, error, next episode), the poster gate, rail scrolling,
+pause, timeupdate, ended, error, next episode), the frame's `color` parameter
+retinted to the theme picked on settings, the poster gate, rail scrolling,
 search-box behaviour, the account/sync calls, and the home-row order stored by
 settings.
 

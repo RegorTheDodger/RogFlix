@@ -396,7 +396,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
             '<p class="resume" data-role="resume"></p>'
             '<p class="play-note">%s plays on CineSrc, which remembers your '
             'place — and so does this site. Its own sources, quality and '
-            'subtitles apply. <a href="%s" target="_blank" '
+            'subtitles apply. <a href="%s" data-embed-link target="_blank" '
             'rel="noopener noreferrer">Open in a new tab</a> if the frame '
             'stays blank.</p></div>'
             % (esc(player), esc(player), esc(where), gate, esc(where),
