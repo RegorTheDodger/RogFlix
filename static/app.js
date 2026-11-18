@@ -19,6 +19,7 @@ const LS_WATCHED = "iml:watched";
 const LS_CATALOG = "iml:catalog";
 const LS_REMOVED = "iml:removed";
 const LS_DROPPED = "iml:dropped";
+const PREFS_AT = "iml:prefs-at";
 
 /* A film is finished when the player reports the last couple of minutes,
  * not when it passes a fraction of the duration. These streams often claim a
@@ -423,58 +424,52 @@ function fill(name, items, emptyText) {
 
 /* -------------------------------------------------------------- billboard */
 
-let fallbackBillboard = "";
-let shownBillboard = null;
-
-function billboardHtml(m, kicker) {
-  const href = esc(watchHref(m));
-  const title = esc(m.title);
-  const cover = m.cover ? '<img src="' + esc(m.cover) + '" alt="">' : "";
-  const chips = [m.year, m.lang].filter(Boolean)
-    .map((b) => '<span class="bb-chip">' + esc(b) + "</span>").join("");
-
-  return (
-    '<section class="bb">' +
-    '<div class="bb-art" aria-hidden="true">' + cover + "</div>" +
-    '<div class="bb-scrim" aria-hidden="true"></div>' +
-    '<div class="bb-inner">' +
-    '<p class="bb-kicker">' + esc(kicker || "From your list") + "</p>" +
-    '<h1 class="bb-title">' + title + "</h1>" +
-    (chips ? '<p class="bb-meta">' + chips + "</p>" : "") +
-    '<div class="bb-actions">' +
-    '<a class="btn play" href="' + href + '">' + SVG_PLAY + "Play</a>" +
-    '<a class="btn ghost" href="' + href + '">More info</a>' +
-    "</div></div>" +
-    '<div class="bb-poster" aria-hidden="true">' + cover + "</div>" +
-    "</section>"
-  );
-}
-
-/* The newest saved film takes the hero, falling back to the last film played
- * so a fresh list is not an empty page. Only rewritten when the choice
- * actually changes, so the image does not reload on every paint. */
-function renderBillboard() {
+/* The hero is a carousel of ten films taken from the rails below it. The
+ * server marks the first one live; this turns the rest on, one every few
+ * seconds, and loads each slide's images only when its turn comes. */
+function wireBillboard() {
   const host = document.querySelector("[data-billboard]");
   if (!host) return;
-  if (!fallbackBillboard) fallbackBillboard = host.innerHTML;
+  const slides = Array.from(host.querySelectorAll("[data-slide]"));
+  const dots = Array.from(host.querySelectorAll("[data-bb-dot]"));
+  if (slides.length < 2) return;
 
-  let item = getList()[0] || null;
-  let kicker = "From your list";
+  let at = 0;
+  let timer = 0;
 
-  if (!item) {
-    item = continueWatching()[0] || null;
-    if (item) kicker = "Continue watching";
+  function load(slide) {
+    slide.querySelectorAll("img[data-src]").forEach((img) => {
+      if (!img.getAttribute("src")) img.setAttribute("src", img.dataset.src);
+    });
   }
 
-  const key = item ? item.id + "|" + kicker : "";
-  if (key === shownBillboard) return;
-  shownBillboard = key;
-  host.innerHTML = item ? billboardHtml(item, kicker) : fallbackBillboard;
+  function show(next, byHand) {
+    at = (next + slides.length) % slides.length;
+    slides.forEach((slide, n) => slide.classList.toggle("is-live", n === at));
+    dots.forEach((dot, n) =>
+      dot.setAttribute("aria-current", n === at ? "true" : "false"));
+    load(slides[at]);
+    if (byHand) start();
+  }
+
+  function stop() {
+    window.clearInterval(timer);
+  }
+
+  function start() {
+    stop();
+    timer = window.setInterval(() => show(at + 1), 7000);
+  }
+
+  dots.forEach((dot, n) => dot.addEventListener("click", () => show(n, true)));
+  host.addEventListener("mouseenter", stop);
+  host.addEventListener("mouseleave", start);
+  load(slides[0]);
+  /* a still hero for anybody who asked their system not to animate things */
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) start();
 }
 
 function paint() {
-  renderBillboard();
-
   const list = getList();
   const saved = new Set(list.map((m) => m.id));
 
@@ -839,6 +834,44 @@ function wireBar() {
 
 /* Account state is merged on the server, so the same login works on both
  * the modern and Lumia clients without exposing the password to JavaScript. */
+/* Theme and row order travel with the account. Both are choices rather than
+ * history, and neither is a list the server can merge item by item, so a
+ * stamp decides which side is newer. */
+function prefsAt() {
+  try {
+    return Number(localStorage.getItem(PREFS_AT)) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function touchPrefs() {
+  try {
+    localStorage.setItem(PREFS_AT, String(Date.now()));
+  } catch (e) {
+    /* private mode: the choice lasts this tab only */
+  }
+}
+
+function localPrefs() {
+  return { theme: savedTheme(), rows: savedRows(), at: prefsAt() };
+}
+
+function applyPrefs(prefs) {
+  if (!prefs || !prefs.at || prefs.at <= prefsAt()) return;
+  try {
+    localStorage.setItem(THEME_KEY, prefs.theme || "saffron");
+    if (Array.isArray(prefs.rows) && prefs.rows.length) storeRows(prefs.rows);
+    localStorage.setItem(PREFS_AT, String(prefs.at));
+  } catch (e) {
+    return;
+  }
+  applyTheme(savedTheme());
+  markTheme(savedTheme());
+  applyHomeRows();
+  document.dispatchEvent(new Event("prefs:applied"));
+}
+
 function syncAccount() {
   const askedAt = Date.now();
   fetch("/auth/me", { credentials: "same-origin" })
@@ -851,7 +884,8 @@ function syncAccount() {
         watched: getWatched(),
         catalog: getCatalog(),
         removed: getRemoved(),
-        dropped: getDropped()
+        dropped: getDropped(),
+        prefs: localPrefs()
       };
       return fetch("/api/sync", {
         method: "POST",
@@ -878,6 +912,7 @@ function syncAccount() {
         if ((local[id] || 0) > (synced[id] || 0)) synced[id] = local[id];
       });
       write(LS_DROPPED, synced);
+      applyPrefs(state.prefs);
       paint();
     })
     .catch(() => {
@@ -1110,17 +1145,25 @@ function wireRowSettings() {
   const shipped = new Map(defaults.map((row) => [row.id, row]));
 
   let rows = [];
-  savedRows().forEach((row) => {
-    if (!shipped.has(row.id) || rows.some((one) => one.id === row.id)) return;
-    rows.push({
-      id: row.id,
-      title: shipped.get(row.id).title,
-      on: row.on !== false
+
+  /* Rebuilt from storage when another device's order arrives mid-visit. */
+  function reload() {
+    rows = [];
+    savedRows().forEach((row) => {
+      if (!shipped.has(row.id) || rows.some((one) => one.id === row.id)) return;
+      rows.push({
+        id: row.id,
+        title: shipped.get(row.id).title,
+        on: row.on !== false
+      });
     });
-  });
-  defaults.forEach((row) => {
-    if (!rows.some((one) => one.id === row.id)) rows.push(row);
-  });
+    defaults.forEach((row) => {
+      if (!rows.some((one) => one.id === row.id)) rows.push(row);
+    });
+    paintRows();
+  }
+
+  reload();
 
   function paintRows() {
     rows.forEach((row) => {
@@ -1134,6 +1177,8 @@ function wireRowSettings() {
 
   function save() {
     storeRows(rows);
+    touchPrefs();
+    syncAccount();
     paintRows();
   }
 
@@ -1171,6 +1216,7 @@ function wireRowSettings() {
   }
 
   paintRows();
+  document.addEventListener("prefs:applied", reload);
 }
 
 /* --------------------------------------------------------------- themes */
@@ -1191,20 +1237,22 @@ function applyTheme(name) {
   document.documentElement.setAttribute("data-theme", name || "saffron");
 }
 
+function markTheme(name) {
+  const list = document.querySelector("[data-theme-list]");
+  if (!list) return;
+  list.querySelectorAll("[data-theme-option]").forEach((button) => {
+    button.setAttribute(
+      "aria-pressed",
+      button.dataset.themeOption === name ? "true" : "false"
+    );
+  });
+}
+
 function wireTheme() {
   const list = document.querySelector("[data-theme-list]");
   if (!list) return;
 
-  function mark(name) {
-    list.querySelectorAll("[data-theme-option]").forEach((button) => {
-      button.setAttribute(
-        "aria-pressed",
-        button.dataset.themeOption === name ? "true" : "false"
-      );
-    });
-  }
-
-  mark(savedTheme());
+  markTheme(savedTheme());
   list.addEventListener("click", (event) => {
     const button = event.target.closest("[data-theme-option]");
     if (!button) return;
@@ -1215,7 +1263,9 @@ function wireTheme() {
     } catch (e) {
       /* private mode: the choice lasts this page only */
     }
-    mark(name);
+    touchPrefs();
+    syncAccount();
+    markTheme(name);
   });
 }
 
@@ -1228,6 +1278,7 @@ wirePlayer();
 wireCineSrc();
 wireRails();
 wireBar();
+wireBillboard();
 applyHomeRows();
 wireRowSettings();
 wireTheme();

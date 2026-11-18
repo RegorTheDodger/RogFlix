@@ -548,38 +548,57 @@ def billboard_fallback():
     )
 
 
-def billboard_item(item, kicker="Featured"):
-    """The hero, painted from the catalogue's own featured film."""
+def billboard_slide(item, index):
+    """One film of the hero carousel.
+
+    Only the first slide carries image URLs; the rest load theirs when they
+    come round, so the home page is not ten backdrops heavier than before.
+    """
+    live = index == 0
     cover = item.get("background") or item.get("cover") or ""
     poster = item.get("cover") or ""
     kind = "series" if item.get("type") == "series" else "movie"
     href = "/title/%s/%s" % (kind, item["id"])
-    bits = (item.get("service"), "Series" if kind == "series" else "Film",
-            item.get("year"))
+    bits = (item.get("service"), "Film", item.get("year"))
     chips = "".join('<span class="bb-chip">%s</span>' % esc(bit)
                     for bit in bits if bit)
 
-    parts = ['<section class="bb">']
-    if cover:
-        parts.append('<div class="bb-art" aria-hidden="true">'
-                     '<img src="%s" alt=""></div>' % esc(cover))
-    parts.append('<div class="bb-scrim" aria-hidden="true"></div>')
-    parts.append('<div class="bb-inner">'
-                 '<p class="bb-kicker">%s</p>'
-                 '<h1 class="bb-title">%s</h1>'
-                 % (esc(kicker), esc(item["name"])))
-    if chips:
-        parts.append('<p class="bb-meta">%s</p>' % chips)
-    parts.append('<div class="bb-actions">'
-                 '<a class="btn play" href="%s">%sPlay</a>'
-                 '<a class="btn ghost" href="%s">More info</a>'
-                 "</div></div>" % (esc(href), ICON_PLAY, esc(href)))
-    if poster:
-        parts.append('<div class="bb-poster" aria-hidden="true">'
-                     '<img src="%s" alt=""></div>' % esc(poster))
-    parts.append("</section>")
-    return "".join(parts)
+    def art(url, css_class):
+        if not url:
+            return ""
+        source = ('src="%s"' if live else 'data-src="%s"') % esc(url)
+        return ('<div class="%s" aria-hidden="true"><img %s alt=""></div>'
+                % (css_class, source))
 
+    return (
+        '<section class="bb%s" data-slide="%d">'
+        '%s<div class="bb-scrim" aria-hidden="true"></div>'
+        '<div class="bb-inner">'
+        '<p class="bb-kicker">Featured</p>'
+        '<h1 class="bb-title">%s</h1>%s'
+        '<div class="bb-actions">'
+        '<a class="btn play" href="%s">%sPlay</a>'
+        '<a class="btn ghost" href="%s">More info</a>'
+        '</div></div>%s</section>'
+        % (" is-live" if live else "", index, art(cover, "bb-art"),
+           esc(item.get("name") or ""),
+           '<p class="bb-meta">%s</p>' % chips if chips else "",
+           esc(href), ICON_PLAY, esc(href), art(poster, "bb-poster")))
+
+
+def billboard_carousel(items):
+    """The home hero: ten films from the rails, one at a time."""
+    slides = "".join(billboard_slide(item, index)
+                     for index, item in enumerate(items))
+    dots = "".join(
+        '<button class="bb-dot%s" type="button" data-bb-dot="%d" '
+        'aria-label="Show %s" aria-current="%s"></button>'
+        % (" is-live" if index == 0 else "", index,
+           esc(item.get("name") or ""), "true" if index == 0 else "false")
+        for index, item in enumerate(items))
+    return ('<div class="bb-carousel" data-bb-carousel>%s'
+            '<div class="bb-dots" data-bb-dots>%s</div></div>'
+            % (slides, dots))
 
 def home_page():
     # A first visit should look like a catalogue, not an empty shelf: the hero
@@ -588,8 +607,8 @@ def home_page():
         rails_data = catalog.rows()
     except Exception:
         rails_data = []
-    hero_item = catalog.featured(rails_data) if rails_data else None
-    hero = billboard_item(hero_item) if hero_item else billboard_fallback()
+    picks = catalog.picks(rails_data, 10) if rails_data else []
+    hero = billboard_carousel(picks) if picks else billboard_fallback()
 
     rails = [shelf(name, "catalog-%s" % key,
                    "".join(library_card(one) for one in items))
