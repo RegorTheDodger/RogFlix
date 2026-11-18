@@ -332,6 +332,8 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 - Watch ten seconds and the title appears under Continue watching.
 - In `/settings`, under **Home page rows**, untick a row or move it with the
   arrows; the home page follows on the next load.
+- **Colour** in `/settings` picks one of fifteen accents for the whole site,
+  kept in the browser.
 - Sign in and the next visit merges this browser's list with the account's.
 
 ## Configuration
