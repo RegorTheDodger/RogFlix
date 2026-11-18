@@ -713,6 +713,23 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
 .bb-dot:hover { background: rgba(245, 237, 227, .62); }
 .bb-dot.is-live { width: 22px; background: var(--saffron); }
 
+/* how long this film has left before the next one */
+.bb-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(245, 237, 227, .12);
+  overflow: hidden;
+}
+.bb-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--saffron);
+}
+
 .bb {
   position: relative;
   display: flex;
@@ -1248,6 +1265,33 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
   margin: clamp(30px, 4vw, 52px) auto 0;
   padding: 0 var(--gutter);
 }
+
+/* My List keeps films and shows in their own grids, under their own heads.
+   It reads as one column, so it lines up with the heading above it. */
+.collection {
+  max-width: var(--read-max);
+  margin: clamp(34px, 4vw, 52px) auto 0;
+  padding: 0 var(--gutter);
+}
+.collection:last-of-type { margin-bottom: clamp(64px, 8vw, 104px); }
+.collection-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: clamp(16px, 2vw, 22px);
+  border-bottom: 1px solid var(--line);
+}
+.collection-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.15rem, 1.8vw, 1.5rem);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.collection-head .shelf-note { margin: 0; }
+.collection .empty { margin-top: 4px; }
 
 .grid {
   display: grid;
