@@ -443,8 +443,38 @@ function fill(name, items, emptyText) {
  * its films off the top of the page too. When that leaves nothing, the banner
  * takes over. Each film holds for five seconds with a countdown along the
  * bottom edge, and the dots are built here so their number matches the reel. */
-const BILLBOARD_DWELL = 5000;
 const BILLBOARD_LIMIT = 10;
+
+/* How long each film holds. Ten seconds unless somebody picks another number
+ * on /settings; the countdown bar is drawn from the same value. */
+const DWELL_KEY = "iml:dwell";
+const DWELL_DEFAULT = 10;
+const DWELL_MIN = 1;
+const DWELL_MAX = 600;
+
+function dwellValue(seconds) {
+  const n = Math.round(Number(seconds));
+  if (!isFinite(n)) return DWELL_DEFAULT;
+  if (n < DWELL_MIN) return DWELL_MIN;
+  return n > DWELL_MAX ? DWELL_MAX : n;
+}
+
+function savedDwell() {
+  try {
+    const raw = localStorage.getItem(DWELL_KEY);
+    return raw === null || raw === "" ? DWELL_DEFAULT : dwellValue(raw);
+  } catch (e) {
+    return DWELL_DEFAULT;
+  }
+}
+
+function storeDwell(seconds) {
+  try {
+    localStorage.setItem(DWELL_KEY, String(dwellValue(seconds)));
+  } catch (e) {
+    /* private mode: the choice lasts this page only */
+  }
+}
 
 function wireBillboard() {
   const host = document.querySelector("[data-billboard]");
@@ -481,13 +511,18 @@ function wireBillboard() {
     });
   }
 
+  /* the hold, read each time so a change on /settings is picked up */
+  function hold() {
+    return savedDwell() * 1000;
+  }
+
   /* restart the countdown from empty every time the film changes */
   function countdown() {
     if (!bar || kept.length < 2) return;
     bar.style.transition = "none";
     bar.style.width = "0%";
     void bar.offsetWidth;
-    bar.style.transition = "width " + BILLBOARD_DWELL + "ms linear";
+    bar.style.transition = "width " + hold() + "ms linear";
     bar.style.width = "100%";
   }
 
@@ -510,7 +545,7 @@ function wireBillboard() {
   function start() {
     stop();
     if (kept.length > 1) {
-      timer = window.setInterval(() => show(at + 1), BILLBOARD_DWELL);
+      timer = window.setInterval(() => show(at + 1), hold());
     }
   }
 
@@ -924,7 +959,12 @@ function touchPrefs() {
 }
 
 function localPrefs() {
-  return { theme: savedTheme(), rows: savedRows(), at: prefsAt() };
+  return {
+    theme: savedTheme(),
+    rows: savedRows(),
+    dwell: savedDwell(),
+    at: prefsAt()
+  };
 }
 
 function applyPrefs(prefs) {
@@ -932,6 +972,7 @@ function applyPrefs(prefs) {
   try {
     localStorage.setItem(THEME_KEY, prefs.theme || "saffron");
     if (Array.isArray(prefs.rows) && prefs.rows.length) storeRows(prefs.rows);
+    if (Number(prefs.dwell) >= DWELL_MIN) storeDwell(prefs.dwell);
     localStorage.setItem(PREFS_AT, String(prefs.at));
   } catch (e) {
     return;
@@ -1339,6 +1380,48 @@ function wireTheme() {
   });
 }
 
+/* ---------------------------------------------- carousel speed setting */
+
+function wireDwell() {
+  const input = document.querySelector("[data-dwell-input]");
+  if (!input) return;
+
+  const show = () => {
+    input.value = String(savedDwell());
+  };
+
+  const save = () => {
+    const seconds = dwellValue(input.value);
+    input.value = String(seconds);
+    storeDwell(seconds);
+    touchPrefs();
+    syncAccount();
+  };
+
+  show();
+  input.addEventListener("change", save);
+  /* number fields do not always commit on blur, so save as they type too */
+  let pending = 0;
+  input.addEventListener("input", () => {
+    window.clearTimeout(pending);
+    pending = window.setTimeout(save, 500);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    window.clearTimeout(pending);
+    save();
+  });
+  const reset = document.querySelector("[data-dwell-reset]");
+  if (reset) {
+    reset.addEventListener("click", () => {
+      input.value = String(DWELL_DEFAULT);
+      save();
+    });
+  }
+  document.addEventListener("prefs:applied", show);
+}
+
 normaliseList();
 paint();
 wireAuth();
@@ -1352,6 +1435,7 @@ wireBillboard();
 applyHomeRows();
 wireRowSettings();
 wireTheme();
+wireDwell();
 window.addEventListener("pageshow", () => {
   paint();
   wireRails();

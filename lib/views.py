@@ -766,12 +766,29 @@ def theme_panel():
         '<div class="swatches" data-theme-list>%s</div></section>' % swatches)
 
 
+def dwell_panel():
+    """How long the hero holds each film; the browser applies and keeps it."""
+    return (
+        '<section class="panel dwell-panel" data-dwell-panel>'
+        '<h2>Carousel speed</h2>'
+        '<p class="panel-note">How long the home page hero holds each film '
+        "before moving on, in whole seconds — ten by default. The bar along "
+        "the bottom of the carousel counts it down.</p>"
+        '<div class="dwell-field">'
+        '<label for="dwell-seconds">Seconds per film</label>'
+        '<input id="dwell-seconds" type="number" inputmode="numeric" '
+        'min="1" max="600" step="1" value="10" data-dwell-input>'
+        '<button class="btn ghost tiny" type="button" data-dwell-reset>'
+        "Reset to 10</button></div></section>"
+    )
+
+
 def settings_page(top_lang="english"):
     return ("Settings",
             '<section class="page-head">'
             '<p class="eyebrow">Preferences</p>'
             '<h1 class="h1">Settings</h1></section>'
-            + theme_panel() +
+            + theme_panel() + dwell_panel() +
             '<section class="panel auth-panel" data-auth-panel><h2>Sync between devices</h2>'
             '<p class="panel-note">Create an account or log in to sync your '
             "list, watch time and resume positions between your devices.</p>"
