@@ -57,8 +57,9 @@ locally) for accounts. No build step, no client-side framework.
 
 **The catalogue.** RogFlix reads the Streaming Catalogs addon, which lists what
 35 services are carrying — films and series separately. The home page opens with
-a carousel of ten films drawn from the rows still shown, then one row per
-service, painted
+a carousel of ten films drawn from the rows still shown, each holding for ten
+seconds with a countdown along its bottom edge (the hold is adjustable on
+`/settings`), then one row per service, painted
 straight from the catalogue, so a first visit already looks like a library
 rather than an empty shelf.
 
@@ -120,9 +121,9 @@ erased by an older copy from the other.
   never replaced by a blank.
 - **Finishing or clearing** a title drops the resume point rather than sending a
   device backwards.
-- **Theme and home rows** — one preference stamp, newest change wins, because an
-  accent is a single choice and an order is a whole arrangement rather than
-  something to merge item by item.
+- **Theme, home rows and carousel speed** — one preference stamp, newest change
+  wins, because an accent is a single choice, an order is a whole arrangement
+  and a speed is one number, none of them something to merge item by item.
 
 Passwords are stored as PBKDF2-HMAC-SHA256 hashes with a per-user salt, and a
 session is a random token whose hash — not the token — is kept. Attempts are
@@ -232,8 +233,9 @@ file that knows a database dialect.
 and watch time, painting those shelves, the CineSrc `postMessage` bridge (play,
 pause, timeupdate, ended, error, next episode), the frame's `color` parameter
 retinted to the theme picked on settings, the poster gate, rail scrolling,
-search-box behaviour, the account/sync calls, and the home-row order stored by
-settings.
+search-box behaviour, the account/sync calls, the home-row order stored by
+settings, and the hero carousel: which rows its films come from, the hold
+between films and the countdown under them.
 
 **`static/motion.js`** — presentation only: the reveal-on-scroll and any small
 transitions, kept out of `app.js` so the data layer stays readable. Every page
@@ -345,6 +347,8 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
   arrows; the home page follows on the next load.
 - **Colour** in `/settings` picks one of fifteen accents for the whole site,
   kept in the browser.
+- **Carousel speed** in `/settings` sets how long each film in the hero holds —
+  ten seconds unless you change it; the countdown bar follows the number.
 - Sign in and the next visit merges this browser's list with the account's.
 
 ## Configuration

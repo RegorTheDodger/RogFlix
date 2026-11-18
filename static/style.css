@@ -1770,6 +1770,31 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
 .radio input { accent-color: var(--saffron); width: 15px; height: 15px; }
 .radio:hover { color: var(--paper); }
 
+/* how long the hero holds each film */
+
+.dwell-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.dwell-field label { font-size: 14px; color: var(--paper-dim); }
+.dwell-field input {
+  width: 110px;
+  padding: 10px 12px;
+  background: var(--ink-0);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+.dwell-field input:focus {
+  outline: 0;
+  border-color: var(--saffron);
+  box-shadow: 0 0 0 3px rgba(var(--saffron-rgb), .12);
+}
+
 /* ------------------------------------------------------------ home rows */
 
 .row-list {
