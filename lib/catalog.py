@@ -133,9 +133,28 @@ def rows(limit=16):
     return out
 
 
-def featured(rows_data):
-    for _key, _name, items in rows_data:
-        for item in items:
-            if item.get("background") and item.get("rating"):
-                return item
-    return rows_data[0][2][0] if rows_data and rows_data[0][2] else None
+def picks(rows_data, limit=10):
+    """Films for the hero carousel, taken from the rails underneath it.
+
+    One film per film row first, then a second from each, so no single service
+    owns the top of the page. Each row is offered in backdrop order: the hero
+    paints a wide still behind the title, and not every catalogue gives one.
+    """
+    film_rows = [sorted(items, key=lambda one: 0 if one.get("background") else 1)
+                 for _key, _name, items in rows_data
+                 if items and items[0].get("type") != "series"]
+
+    seen, out, depth = set(), [], 0
+    while len(out) < limit and any(depth < len(items) for items in film_rows):
+        for items in film_rows:
+            if depth >= len(items):
+                continue
+            item = items[depth]
+            if item["id"] in seen:
+                continue
+            seen.add(item["id"])
+            out.append(item)
+            if len(out) >= limit:
+                break
+        depth += 1
+    return out

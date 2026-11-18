@@ -57,9 +57,9 @@ locally) for accounts. No build step, no client-side framework.
 
 **The catalogue.** RogFlix reads the Streaming Catalogs addon, which lists what
 35 services are carrying — films and series separately. The home page opens with
-a featured film and then one row per service, painted straight from the
-catalogue, so a first visit already looks like a library rather than an empty
-shelf.
+a carousel of ten films drawn from those rows, then one row per service, painted
+straight from the catalogue, so a first visit already looks like a library
+rather than an empty shelf.
 
 **Metadata.** The addon answers catalogues only: it has no synopsis or episode
 list. Those come from Cinemeta, keyed by the IMDb id every catalogue entry
@@ -118,6 +118,9 @@ erased by an older copy from the other.
   never replaced by a blank.
 - **Finishing or clearing** a title drops the resume point rather than sending a
   device backwards.
+- **Theme and home rows** — one preference stamp, newest change wins, because an
+  accent is a single choice and an order is a whole arrangement rather than
+  something to merge item by item.
 
 Passwords are stored as PBKDF2-HMAC-SHA256 hashes with a per-user salt, and a
 session is a random token whose hash — not the token — is kept. Attempts are
@@ -196,9 +199,10 @@ what the player needs.
 
 **`lib/catalog.py`** — the Streaming Catalogs client. Defines the eight rows the
 home page asks for (service + film or series), fetches them in parallel with a
-15-minute cache, normalises each entry to the card shape, and picks the featured
-title for the hero. Row ids are service-based (`catalog-movie-nfx`) rather than
-positional, so settings can hide or reorder them safely.
+15-minute cache, normalises each entry to the card shape, and picks the ten films
+the hero carousel shows — one per film row, then a second from each, so no single
+service owns the top of the page. Row ids are service-based (`catalog-movie-nfx`)
+rather than positional, so settings can hide or reorder them safely.
 
 **`lib/cinesrc.py`** — the player. Turns a TMDB id and an optional season/episode
 into a CineSrc embed URL, adding the default accent colour, the seek-button
