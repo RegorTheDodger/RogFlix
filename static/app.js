@@ -412,6 +412,20 @@ function cardHtml(m) {
   );
 }
 
+/* ext:movie:* is a film, ext:series:* is a show, and an episode id (four
+ * parts after the prefix) belongs to the show it came from. */
+function isShow(m) {
+  return /^ext:series:/.test(String((m && m.id) || ""));
+}
+
+function paintCollection(name, items, emptyText) {
+  fill(name, items, emptyText);
+  const count = document.querySelector('[data-count="' + name + '"]');
+  if (count) {
+    count.textContent = items.length ? items.length + " saved" : "";
+  }
+}
+
 function fill(name, items, emptyText) {
   const list = document.querySelector('[data-shelf="' + name + '"]');
   const note = document.querySelector('[data-empty="' + name + '"]');
@@ -424,16 +438,36 @@ function fill(name, items, emptyText) {
 
 /* -------------------------------------------------------------- billboard */
 
-/* The hero is a carousel of ten films taken from the rails below it. The
- * server marks the first one live; this turns the rest on, one every few
- * seconds, and loads each slide's images only when its turn comes. */
+/* The hero is a carousel of films taken from the service rows underneath it,
+ * and only the rows still switched on in settings: hiding a catalogue takes
+ * its films off the top of the page too. When that leaves nothing, the banner
+ * takes over. Each film holds for five seconds with a countdown along the
+ * bottom edge, and the dots are built here so their number matches the reel. */
+const BILLBOARD_DWELL = 5000;
+
 function wireBillboard() {
   const host = document.querySelector("[data-billboard]");
   if (!host) return;
-  const slides = Array.from(host.querySelectorAll("[data-slide]"));
-  const dots = Array.from(host.querySelectorAll("[data-bb-dot]"));
-  if (slides.length < 2) return;
 
+  const carousel = host.querySelector("[data-bb-carousel]");
+  const fallback = host.querySelector("[data-bb-fallback]");
+  const hiddenRows = new Set(
+    savedRows().filter((row) => row.on === false).map((row) => row.id)
+  );
+
+  host.querySelectorAll("[data-slide]").forEach((slide) => {
+    if (hiddenRows.has(slide.dataset.row || "")) slide.remove();
+  });
+  const kept = Array.from(host.querySelectorAll("[data-slide]"));
+
+  if (!carousel || !kept.length) {
+    if (carousel) carousel.hidden = true;
+    if (fallback) fallback.hidden = false;
+    return;
+  }
+
+  const dotsBox = carousel.querySelector("[data-bb-dots]");
+  const bar = carousel.querySelector("[data-bb-progress] i");
   let at = 0;
   let timer = 0;
 
@@ -443,15 +477,25 @@ function wireBillboard() {
     });
   }
 
+  /* restart the countdown from empty every time the film changes */
+  function countdown() {
+    if (!bar || kept.length < 2) return;
+    bar.style.transition = "none";
+    bar.style.width = "0%";
+    void bar.offsetWidth;
+    bar.style.transition = "width " + BILLBOARD_DWELL + "ms linear";
+    bar.style.width = "100%";
+  }
+
   function show(next, byHand) {
-    at = (next + slides.length) % slides.length;
-    slides.forEach((slide, n) => slide.classList.toggle("is-live", n === at));
-    /* the wide dot is the position indicator: it has to move with the slide */
+    at = (next + kept.length) % kept.length;
+    kept.forEach((slide, n) => slide.classList.toggle("is-live", n === at));
     dots.forEach((dot, n) => {
       dot.classList.toggle("is-live", n === at);
       dot.setAttribute("aria-current", n === at ? "true" : "false");
     });
-    load(slides[at]);
+    load(kept[at]);
+    countdown();
     if (byHand) start();
   }
 
@@ -461,11 +505,28 @@ function wireBillboard() {
 
   function start() {
     stop();
-    timer = window.setInterval(() => show(at + 1), 5000);
+    if (kept.length > 1) {
+      timer = window.setInterval(() => show(at + 1), BILLBOARD_DWELL);
+    }
   }
 
-  dots.forEach((dot, n) => dot.addEventListener("click", () => show(n, true)));
-  load(slides[0]);
+  const dots = kept.map((slide, n) => {
+    const dot = document.createElement("button");
+    const title = slide.querySelector(".bb-title");
+    dot.type = "button";
+    dot.className = "bb-dot";
+    dot.dataset.bbDot = String(n);
+    dot.setAttribute("aria-current", "false");
+    dot.setAttribute("aria-label",
+      "Show " + ((title && title.textContent) || "film " + (n + 1)));
+    dot.addEventListener("click", () => show(n, true));
+    if (dotsBox) dotsBox.appendChild(dot);
+    return dot;
+  });
+
+  if (kept.length < 2 && dotsBox) dotsBox.hidden = true;
+  load(kept[0]);
+  show(0);
   start();
 }
 
@@ -486,8 +547,13 @@ function paint() {
     })
   );
 
-  fill("watchlist", list.map((m) => Object.assign({ saved: true }, m)));
-  fill("watchlist-full", list.map((m) => Object.assign({ saved: true }, m)));
+  const savedItems = list.map((m) => Object.assign({ saved: true }, m));
+  fill("watchlist", savedItems);
+  /* the list page keeps films and shows apart */
+  paintCollection("films", savedItems.filter((m) => !isShow(m)), "Nothing saved yet.");
+  paintCollection("shows", savedItems.filter(isShow), "Nothing saved yet.");
+  const clearList = document.querySelector('[data-action="clear-watchlist"]');
+  if (clearList) clearList.hidden = list.length === 0;
   const leaving = continueWatching();
   fill("continue", leaving);
   /* nothing to clear means no button; a question left open closes with the

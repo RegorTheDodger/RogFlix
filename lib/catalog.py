@@ -134,26 +134,34 @@ def rows(limit=16):
 
 
 def picks(rows_data, limit=10):
-    """Films for the hero carousel, taken from the rails underneath it.
+    """Films for the hero carousel, as (row id, film) pairs.
 
     One film per film row first, then a second from each, so no single service
     owns the top of the page. Each row is offered in backdrop order: the hero
     paints a wide still behind the title, and not every catalogue gives one.
+
+    The row id travels with the film because the browser can hide a row in
+    settings, and a hidden catalogue should take its films off the hero too.
     """
-    film_rows = [sorted(items, key=lambda one: 0 if one.get("background") else 1)
-                 for _key, _name, items in rows_data
-                 if items and items[0].get("type") != "series"]
+    film_rows = []
+    for key, _name, items in rows_data:
+        if not items or items[0].get("type") == "series":
+            continue
+        film_rows.append((
+            "catalog-%s" % key,
+            sorted(items, key=lambda one: 0 if one.get("background") else 1)
+        ))
 
     seen, out, depth = set(), [], 0
-    while len(out) < limit and any(depth < len(items) for items in film_rows):
-        for items in film_rows:
+    while len(out) < limit and any(depth < len(items) for _row, items in film_rows):
+        for row_id, items in film_rows:
             if depth >= len(items):
                 continue
             item = items[depth]
             if item["id"] in seen:
                 continue
             seen.add(item["id"])
-            out.append(item)
+            out.append((row_id, item))
             if len(out) >= limit:
                 break
         depth += 1

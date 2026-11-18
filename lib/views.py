@@ -245,17 +245,31 @@ def grid(items_html, empty_text=""):
 
 
 def watchlist_page(top_lang="english"):
+    """Films and shows kept apart: they are browsed differently and a list of
+    both mixes a two-hour film in with a five-season show."""
+
+    def collection(name, title, empty_text):
+        return (
+            '<section class="collection" data-collection="%s">'
+            '<div class="collection-head">'
+            '<h2>%s</h2>'
+            '<p class="shelf-note" data-count="%s"></p></div>'
+            '<div class="grid" data-shelf="%s"></div>'
+            '<p class="empty" data-empty="%s" hidden>%s</p>'
+            "</section>" % (name, esc(title), name, name, name, esc(empty_text))
+        )
+
     return ("My List",
             '<section class="page-head">'
             '<p class="eyebrow">Saved</p>'
             '<h1 class="h1">My list</h1>'
-            '<p class="lede">Kept in this browser. Clearing site data or '
-            "switching device will empty it.</p>"
+            '<p class="lede">Films and shows you kept. Stored in this browser, '
+            "and carried to your other devices when you are signed in.</p>"
             '<p class="head-actions">'
             '<button class="btn ghost" type="button" data-action="clear-watchlist">'
             "Clear list</button></p></section>"
-            '<div class="grid" data-shelf="watchlist-full"></div>'
-            '<p class="empty" data-empty="watchlist-full">Nothing saved yet.</p>',
+            + collection("films", "Films", "Nothing saved yet.")
+            + collection("shows", "TV shows", "Nothing saved yet."),
             top_lang)
 
 
@@ -548,11 +562,12 @@ def billboard_fallback():
     )
 
 
-def billboard_slide(item, index):
+def billboard_slide(item, index, row_id=""):
     """One film of the hero carousel.
 
     Only the first slide carries image URLs; the rest load theirs when they
     come round, so the home page is not ten backdrops heavier than before.
+    The row id is kept on the slide so a hidden catalogue can drop its films.
     """
     live = index == 0
     cover = item.get("background") or item.get("cover") or ""
@@ -571,7 +586,7 @@ def billboard_slide(item, index):
                 % (css_class, source))
 
     return (
-        '<section class="bb%s" data-slide="%d">'
+        '<section class="bb%s" data-slide="%d" data-row="%s">'
         '%s<div class="bb-scrim" aria-hidden="true"></div>'
         '<div class="bb-inner">'
         '<p class="bb-kicker">Featured</p>'
@@ -580,25 +595,34 @@ def billboard_slide(item, index):
         '<a class="btn play" href="%s">%sPlay</a>'
         '<a class="btn ghost" href="%s">More info</a>'
         '</div></div>%s</section>'
-        % (" is-live" if live else "", index, art(cover, "bb-art"),
+        % (" is-live" if live else "", index, esc(row_id),
+           art(cover, "bb-art"),
            esc(item.get("name") or ""),
            '<p class="bb-meta">%s</p>' % chips if chips else "",
            esc(href), ICON_PLAY, esc(href), art(poster, "bb-poster")))
 
 
-def billboard_carousel(items):
-    """The home hero: ten films from the rails, one at a time."""
-    slides = "".join(billboard_slide(item, index)
-                     for index, item in enumerate(items))
-    dots = "".join(
-        '<button class="bb-dot%s" type="button" data-bb-dot="%d" '
-        'aria-label="Show %s" aria-current="%s"></button>'
-        % (" is-live" if index == 0 else "", index,
-           esc(item.get("name") or ""), "true" if index == 0 else "false")
-        for index, item in enumerate(items))
+def billboard_carousel(picks):
+    """The home hero: the films from the rails, one at a time.
+
+    The dots and the countdown bar are built by static/app.js once it knows
+    which rows are still shown, so hiding a catalogue can shorten the reel
+    without the markup lying about how many films there are.
+    """
+    slides = "".join(billboard_slide(item, index, row_id)
+                     for index, (row_id, item) in enumerate(picks))
     return ('<div class="bb-carousel" data-bb-carousel>%s'
-            '<div class="bb-dots" data-bb-dots>%s</div></div>'
-            % (slides, dots))
+            '<div class="bb-dots" data-bb-dots></div>'
+            '<div class="bb-progress" data-bb-progress aria-hidden="true">'
+            '<i></i></div></div>' % slides)
+
+
+def billboard_with_fallback(picks):
+    """The carousel, plus the banner it becomes when every row is hidden."""
+    if not picks:
+        return billboard_fallback()
+    return ('%s<div class="bb-fallback" data-bb-fallback hidden>%s</div>'
+            % (billboard_carousel(picks), billboard_fallback()))
 
 def home_page():
     # A first visit should look like a catalogue, not an empty shelf: the hero
@@ -608,7 +632,7 @@ def home_page():
     except Exception:
         rails_data = []
     picks = catalog.picks(rails_data, 10) if rails_data else []
-    hero = billboard_carousel(picks) if picks else billboard_fallback()
+    hero = billboard_with_fallback(picks)
 
     rails = [shelf(name, "catalog-%s" % key,
                    "".join(library_card(one) for one in items))
