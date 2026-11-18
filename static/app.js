@@ -444,6 +444,7 @@ function fill(name, items, emptyText) {
  * takes over. Each film holds for five seconds with a countdown along the
  * bottom edge, and the dots are built here so their number matches the reel. */
 const BILLBOARD_DWELL = 5000;
+const BILLBOARD_LIMIT = 10;
 
 function wireBillboard() {
   const host = document.querySelector("[data-billboard]");
@@ -455,10 +456,13 @@ function wireBillboard() {
     savedRows().filter((row) => row.on === false).map((row) => row.id)
   );
 
+  /* the server sends extra films so ten are still left after filtering */
+  const kept = Array.from(host.querySelectorAll("[data-slide]"))
+    .filter((slide) => !hiddenRows.has(slide.dataset.row || ""))
+    .slice(0, BILLBOARD_LIMIT);
   host.querySelectorAll("[data-slide]").forEach((slide) => {
-    if (hiddenRows.has(slide.dataset.row || "")) slide.remove();
+    if (kept.indexOf(slide) === -1) slide.remove();
   });
-  const kept = Array.from(host.querySelectorAll("[data-slide]"));
 
   if (!carousel || !kept.length) {
     if (carousel) carousel.hidden = true;
