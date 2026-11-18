@@ -403,6 +403,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
         body.append(
             '<div class="player-wrap"><div class="player embed">'
             '<iframe id="player" src="%s" data-cinesrc="%s" allowfullscreen'
+            ' sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"'
             ' allow="autoplay; fullscreen; encrypted-media; picture-in-picture"'
             ' referrerpolicy="origin" loading="eager" title="%s on CineSrc">'
             '</iframe>%s</div></div>'
