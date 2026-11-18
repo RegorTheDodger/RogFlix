@@ -31,7 +31,9 @@ import urllib.parse
 
 BASE = "https://cinesrc.st"
 
-# --saffron in style.css, so the player's accent matches the site
+# --saffron in style.css: what the frame gets when nothing else is picked.
+# static/app.js replaces it with the accent chosen on /settings before the
+# frame loads, so the player follows the theme rather than this default.
 ACCENT = "#f2a33c"
 
 # the player's own seek button; its documented default is fine

@@ -572,24 +572,52 @@ function wirePlayer() {
  * position and the watch time all switch to the episode now playing. */
 const CINESRC_ORIGIN = "https://cinesrc.st";
 
+/* The frame's own controls take their accent from ?color=. The server writes
+ * the default saffron into the URL, and the accent picked on /settings
+ * replaces it here before the frame is allowed to load — so a blue or green
+ * theme no longer plays with an orange scrubber. Nothing is picked for the
+ * default theme, so that URL comes back unchanged and the frame never reloads
+ * for a second time. */
+function playerAccent() {
+  const hex = getComputedStyle(document.documentElement)
+    .getPropertyValue("--saffron")
+    .trim();
+  return /^#[0-9a-f]{6}$/i.test(hex) ? hex : "";
+}
+
+function tintPlayer(url) {
+  const hex = playerAccent();
+  if (!url || !hex) return url;
+  return url.replace(/([?&]color=)[^&]*/i, "$1" + encodeURIComponent(hex));
+}
+
 function wireCineSrc() {
   const frame = document.querySelector("iframe[data-cinesrc]");
   const article = frame && frame.closest("[data-id]");
   if (!frame || !article) return;
 
   let id = article.dataset.id;
+
+  /* one URL serves the frame, the bridge and the "new tab" link, and it
+   * carries the accent this visitor picked */
+  const base = tintPlayer(frame.dataset.cinesrc);
+  if (base !== frame.dataset.cinesrc) {
+    frame.dataset.cinesrc = base;
+    const openTab = document.querySelector("[data-embed-link]");
+    if (openTab) openTab.href = base;
+  }
+
   let meta = {
     id: id,
     title: article.dataset.title,
     cover: article.dataset.cover,
-    url: frame.dataset.cinesrc,
+    url: base,
     href: article.dataset.href || location.pathname,
     year: article.dataset.year
   };
 
   paint();
 
-  const base = frame.dataset.cinesrc;
   const saved = getProgress()[id];
   if (base && saved && saved.seconds && saved.seconds > MIN_SECONDS) {
     const at = Math.floor(saved.seconds);
@@ -600,6 +628,9 @@ function wireCineSrc() {
       note.textContent =
         "Resumed at " + Math.floor(at / 60) + "m " + Math.floor(at % 60) + "s.";
     }
+  } else if (base && frame.getAttribute("src") !== base) {
+    /* no saved second, but the accent changed the URL */
+    frame.src = base;
   }
 
   let lastTick = 0;
@@ -1155,13 +1186,13 @@ normaliseList();
 paint();
 wireAuth();
 syncAccount();
+applyTheme(savedTheme());
 wirePlayer();
 wireCineSrc();
 wireRails();
 wireBar();
 applyHomeRows();
 wireRowSettings();
-applyTheme(savedTheme());
 wireTheme();
 window.addEventListener("pageshow", () => {
   paint();
