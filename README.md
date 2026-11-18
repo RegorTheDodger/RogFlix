@@ -187,8 +187,8 @@ redirects kept for old bookmarks, and `/healthz`. It reads request arguments,
 decides the season and episode being asked for, calls the accounts and sync
 modules, and hands a body to `views`.
 
-**`lib/views.py`** — every piece of HTML. It has the page shell (head, nav,
-footer), the home page with its rows, search, the title page with the player and
+**`lib/views.py`** — every piece of HTML. It has the page shell (head, nav), the
+home page with its rows, search, the title page with the player and
 the episode list, My List, settings, and all the shared pieces: `shelf()` for a
 row, `library_card()` for a poster, `esc()` for escaping, plus the hero fallback.
 Nothing here talks to the network; it renders what it is given.
@@ -348,6 +348,8 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 - **Colour** in `/settings` picks one of fifteen palettes for the whole site —
   the accent, and the room it sits in (inks, paper, hairlines, scrims) are all
   mixed from it — kept in the browser.
+- The **Source** panel at the bottom of `/settings` links to the GitHub
+  repository.
 - **Carousel speed** in `/settings` sets how long each film in the hero holds —
   ten seconds unless you change it; the countdown bar follows the number.
 - Sign in and the next visit merges this browser's list with the account's.
