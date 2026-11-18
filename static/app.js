@@ -446,8 +446,11 @@ function wireBillboard() {
   function show(next, byHand) {
     at = (next + slides.length) % slides.length;
     slides.forEach((slide, n) => slide.classList.toggle("is-live", n === at));
-    dots.forEach((dot, n) =>
-      dot.setAttribute("aria-current", n === at ? "true" : "false"));
+    /* the wide dot is the position indicator: it has to move with the slide */
+    dots.forEach((dot, n) => {
+      dot.classList.toggle("is-live", n === at);
+      dot.setAttribute("aria-current", n === at ? "true" : "false");
+    });
     load(slides[at]);
     if (byHand) start();
   }
@@ -458,15 +461,12 @@ function wireBillboard() {
 
   function start() {
     stop();
-    timer = window.setInterval(() => show(at + 1), 7000);
+    timer = window.setInterval(() => show(at + 1), 5000);
   }
 
   dots.forEach((dot, n) => dot.addEventListener("click", () => show(n, true)));
-  host.addEventListener("mouseenter", stop);
-  host.addEventListener("mouseleave", start);
   load(slides[0]);
-  /* a still hero for anybody who asked their system not to animate things */
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) start();
+  start();
 }
 
 function paint() {
