@@ -57,7 +57,8 @@ locally) for accounts. No build step, no client-side framework.
 
 **The catalogue.** RogFlix reads the Streaming Catalogs addon, which lists what
 35 services are carrying — films and series separately. The home page opens with
-a carousel of ten films drawn from those rows, then one row per service, painted
+a carousel of ten films drawn from the rows still shown, then one row per
+service, painted
 straight from the catalogue, so a first visit already looks like a library
 rather than an empty shelf.
 
@@ -85,7 +86,8 @@ follow. Settings → Home page rows chooses which rows appear and in what order,
 kept in the browser beside your list.
 
 **My List.** The + on any poster saves the title locally, instantly, with no
-account needed. A show is saved as the show, not as whichever episode was open.
+account needed. A show is saved as the show, not as whichever episode was open,
+and the list page keeps films and shows in their own grids under a count.
 Removing one writes a timestamped tombstone so a stale device cannot bring it
 back.
 
@@ -199,9 +201,11 @@ what the player needs.
 
 **`lib/catalog.py`** — the Streaming Catalogs client. Defines the eight rows the
 home page asks for (service + film or series), fetches them in parallel with a
-15-minute cache, normalises each entry to the card shape, and picks the ten films
-the hero carousel shows — one per film row, then a second from each, so no single
-service owns the top of the page. Row ids are service-based (`catalog-movie-nfx`)
+15-minute cache, normalises each entry to the card shape, and offers the films
+the hero carousel draws from — one per film row, then a second from each, so no
+single service owns the top of the page. Each candidate carries its row id, and
+the browser keeps ten from the rows it still shows; hiding every film row leaves
+the search banner in place of the hero. Row ids are service-based (`catalog-movie-nfx`)
 rather than positional, so settings can hide or reorder them safely.
 
 **`lib/cinesrc.py`** — the player. Turns a TMDB id and an optional season/episode
