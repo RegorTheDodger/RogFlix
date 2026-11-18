@@ -680,8 +680,18 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
 .bb-host { position: relative; }
 
 /* the hero carousel: one film at a time, chosen with the dots */
-.bb-carousel .bb { display: none; }
-.bb-carousel .bb.is-live { display: block; }
+.bb-carousel { display: grid; }
+.bb-carousel .bb {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 520ms var(--ease), visibility 0s linear 520ms;
+}
+.bb-carousel .bb.is-live {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 520ms var(--ease), visibility 0s;
+}
 .bb-dots {
   position: absolute;
   left: max(22px, 5vw);
