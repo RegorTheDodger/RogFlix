@@ -631,7 +631,9 @@ def home_page():
         rails_data = catalog.rows()
     except Exception:
         rails_data = []
-    picks = catalog.picks(rails_data, 10) if rails_data else []
+    # more candidates than the reel needs: rows hidden in the browser are
+    # dropped there, and ten films should still be left to show
+    picks = catalog.picks(rails_data, 30) if rails_data else []
     hero = billboard_with_fallback(picks)
 
     rails = [shelf(name, "catalog-%s" % key,
