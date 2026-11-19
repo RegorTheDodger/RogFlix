@@ -1,11 +1,12 @@
 """
 The language a film was made in.
 
-Cinemeta knows a film's country but not its language, so an Indian film that
-einthusan carries in several languages has no local way to say which index is
-the original and which is a dub. Wikipedia writes it into the first
-line of every film article ("RRR is a 2022 Indian Telugu-language epic ..."),
-and its search API needs no key, so one search settles it.
+Cinemeta knows a film's country but not its language, and einthusan never says
+whether an index entry is the original or a dub, so an Indian film that
+einthusan carries in several languages has no local way to say which one to
+start on. Wikipedia's film infobox states it as a field ("language = Telugu"),
+and the first sentence of the article repeats it, so one search and one page
+read settle it — no key, no dependency.
 
 Nothing here is load-bearing: a miss leaves the frame on the index that
 matched the title best, and the language picker is always there to overrule
@@ -25,11 +26,25 @@ UA = "RogFlix/1.0 (+https://rogflix.vercel.app)"
 API = "https://en.wikipedia.org/w/api.php"
 TIMEOUT = 6
 
-# The "-language" phrase is the convention every film article opens with, so
-# matching it strictly beats reacting to a language mentioned in passing.
-_PHRASE = re.compile(r"\b([A-Z][a-z]+)-language\b")
-_TAGS = re.compile(r"<[^>]+>")
-_PAREN = re.compile(r"\s*\((?:[^)]*film|soundtrack|disambiguation)\)\s*$", re.I)
+# The infobox field is the structured statement. The lead sentence is the
+# fallback for an article whose infobox is built by a template, and it is the
+# convention the language is written into ("a 2022 Indian Telugu-language film").
+_FIELD = re.compile(r"\|\s*(?:language|lang)\s*=\s*([^\n]*)")
+_PHRASE = re.compile(r"\b(Tamil|Telugu|Hindi|Malayalam|Kannada|Bengali|"
+                     r"Marathi|Punjabi)-language\b", re.I)
+
+# A search for a film also returns its soundtrack, its score and a novel of
+# the same name; none of those states the film's language in an infobox.
+_NOT_THE_FILM = re.compile(r"\([^)]*(?:soundtrack|album|score|song|music|"
+                           r"novel|book|disambiguation)[^)]*\)", re.I)
+
+# Infobox values carry markup: a citation, a language template, a link.
+_REF = re.compile(r"<ref[^>]*?/>|<ref[^>]*>.*?</ref>", re.S | re.I)
+# Keep what a template holds: a language list is written as {{ubl|Hindi|Marathi}}
+# and dropping the braces' contents would drop the answer with it.
+_TEMPLATE = re.compile(r"\{\{([^{}]*)\}\}")
+_LINK = re.compile(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]")
+_TAG = re.compile(r"<[^>]+>")
 
 # A film's language does not change, so the answer is worth a week. A miss is
 # kept only briefly: an article may be written tomorrow, and a rate-limited
@@ -41,8 +56,19 @@ _lock = threading.Lock()
 _cache = {}
 
 
-def _words(text):
-    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split()
+def _get(params):
+    url = "%s?%s" % (API, urllib.parse.urlencode(params))
+    request = urllib.request.Request(url, headers={
+        "User-Agent": UA,
+        "Accept": "application/json",
+    })
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        raw = response.read(4 * 1024 * 1024)
+    return json.loads(raw.decode("utf-8", "replace"))
+
+
+def _norm(text):
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
 
 
 def _year(value):
@@ -52,40 +78,47 @@ def _year(value):
         return 0
 
 
-def _search(title, year):
-    query = "%s %s film" % (title, year)
-    url = ("%s?action=query&list=search&format=json&formatversion=2"
-           "&srlimit=5&srsearch=%s" % (API, urllib.parse.quote(query)))
-    request = urllib.request.Request(url, headers={
-        "User-Agent": UA,
-        "Accept": "application/json",
-    })
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-        raw = response.read(2 * 1024 * 1024)
-    data = json.loads(raw.decode("utf-8", "replace"))
-    return (data.get("query") or {}).get("search") or []
+def _clean(wikitext):
+    text = _REF.sub(" ", wikitext or "")
+    text = _TEMPLATE.sub(r" \1 ", text)
+    text = _LINK.sub(r"\1", text)
+    text = _TAG.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
-def _is_the_film(page_title, title, snippet, year):
-    """A result is about this film when the years agree and the article title
-    is the film's title, not a song, a soundtrack or a similarly named film.
+def _first_language(text):
+    """The first word of the text that names an index einthusan has."""
+    for word in re.findall(r"[A-Za-z]+", text or ""):
+        if word.lower() in einthusan.LANG_CODES:
+            return word.lower()
+    return ""
 
-    The search is generous enough to return "Tumbbad (soundtrack)" first, and
-    a soundtrack's language is still the film's, so only the year and the
-    title have to line up — a mismatch here would otherwise pick a different
-    film's language.
+
+def _page_title(title, year):
+    """The article about this film.
+
+    The search carries the year, so a remake's own article ranks first, and the
+    result whose title is the film's own — with or without "(2022 film)" on it
+    — wins. A near match is accepted only when one title starts the other,
+    which is how a catalogue "Baahubali 2: The Conclusion" reaches the article
+    of the same name.
     """
-    if str(year) not in snippet:
-        return False
-    page = " ".join(_words(_PAREN.sub("", page_title)))
-    wanted = " ".join(_words(title))
-    if not page or not wanted:
-        return False
-    if page == wanted or page.startswith(wanted):
-        return True
-    # a suffix the article adds ("Vikram" against "Vikram 2022"): every word of
-    # the film's title has to appear in the article's
-    return all(word in page.split() for word in wanted.split())
+    data = _get({"action": "query", "list": "search", "format": "json",
+                 "formatversion": "2", "srlimit": "6",
+                 "srsearch": "%s %d film" % (title, year)})
+    results = [result.get("title") or ""
+               for result in (data.get("query") or {}).get("search") or []]
+    results = [page for page in results if page and not _NOT_THE_FILM.search(page)]
+    wanted = _norm(title)
+    for page in results:
+        plain = re.sub(r"\s*\([^)]*\)\s*$", "", page)
+        if _norm(plain) == wanted:
+            return page
+    for page in results:
+        plain = _norm(re.sub(r"\s*\([^)]*\)\s*$", "", page))
+        if plain and (plain.startswith(wanted) or wanted.startswith(plain)):
+            return page
+    return ""
 
 
 def original(title, year):
@@ -108,20 +141,26 @@ def original(title, year):
 
     answer = ""
     try:
-        for result in _search(title, year_num):
-            snippet = _TAGS.sub(" ", result.get("snippet") or "")
-            if not _is_the_film(result.get("title") or "", title, snippet, year_num):
-                continue
-            phrase = _PHRASE.search(snippet)
-            if phrase:
-                code = phrase.group(1).lower()
-                answer = code if code in einthusan.LANG_CODES else ""
-            # the first article about this film decides, whether or not its
-            # language is one einthusan carries
-            break
+        page = _page_title(title, year_num)
+        if page:
+            data = _get({"action": "parse", "page": page, "prop": "wikitext",
+                         "section": "0", "format": "json",
+                         "formatversion": "2"})
+            text = (data.get("parse") or {}).get("wikitext") or ""
+            # the year has to be on the page as well, so a same-named film's
+            # article cannot lend this one its language
+            if str(year_num) in text:
+                # citations carry their own |language=, so they are removed
+                # before the infobox field is looked for
+                field = _FIELD.search(_REF.sub(" ", text))
+                if field:
+                    answer = _first_language(_clean(field.group(1)))
+                if not answer:
+                    phrase = _PHRASE.search(_clean(text))
+                    answer = phrase.group(1).lower() if phrase else ""
     except Exception:
-        # offline, throttled, or a changed API: no preference, and ask again
-        # in a little while instead of caching the failure for a week
+        # offline, throttled, or a changed API: no preference, and ask again in
+        # a little while instead of caching the failure for a week
         with _lock:
             _cache[key] = (now + MISS_TTL, "")
         return ""
