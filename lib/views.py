@@ -175,7 +175,7 @@ def page(title, body, top_lang="english"):
         "</div></header>"
         '<main class="page" data-lang="en">%s</main>'
         '<script src="/static/motion.js"></script>'
-        '<script src="/static/app.js?v=2"></script>'
+        '<script src="/static/app.js?v=3"></script>'
         "</body></html>"
         % (shown, origin(), shown, links, ICON_SEARCH, ICON_GEAR, body)
     )
@@ -393,7 +393,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
     # One title is rarely on every service, so the first player loads and the
     # rest sit under it as a picker.
     found = players.sources(kind, item.get("id"), item.get("tmdb"), season,
-                            episode)
+                            episode, item.get("country"))
     if found:
         first = found[0]
         where = ("Season %d, episode %d" % (season, episode)
@@ -564,6 +564,126 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
 
     body.append('</article>')
     return (item.get("name") or "Title", "".join(body), "english")
+
+
+# --------------------------------------------------------------------------
+# einthusan frame
+# --------------------------------------------------------------------------
+
+# The one player that is not somebody else's page. It is a document of its own
+# because it fills an iframe rather than a window, so it carries none of the
+# site's navigation — just the film, and a badge that fades once it starts.
+EINTHUSAN_CSS = (
+    "html,body{margin:0;height:100%;background:#000;color:#f3ece4;"
+    "font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}"
+    "video{display:block;width:100%;height:100%;background:#000}"
+    ".badge{position:fixed;left:14px;top:12px;margin:0;padding:6px 11px;"
+    "border-radius:999px;background:rgba(0,0,0,.6);font-size:11px;"
+    "letter-spacing:.08em;text-transform:uppercase;opacity:.92;"
+    "transition:opacity .6s ease;pointer-events:none}"
+    ".badge.gone{opacity:0}"
+    ".say{position:fixed;inset:0;display:flex;flex-direction:column;"
+    "align-items:center;justify-content:center;gap:8px;text-align:center;"
+    "padding:24px}"
+    ".say h1{margin:0;font:600 20px/1.3 Georgia,serif}"
+    ".say p{margin:0;max-width:34em;color:#b8ada1;line-height:1.5}"
+    ".say .kicker{margin:0 0 2px;font-size:11px;letter-spacing:.14em;"
+    "text-transform:uppercase;color:#f2a33c}"
+    "[hidden]{display:none!important}"
+)
+
+
+def _standalone(head_html, css, body):
+    """A complete document for a frame. Callers pass escaped text."""
+    return (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="color-scheme" content="dark">'
+        '<meta name="theme-color" content="#000000">'
+        '<meta name="robots" content="noindex">'
+        "<title>%s</title><style>%s</style></head><body>%s</body></html>"
+        % (head_html, css, body))
+
+
+def einthusan_player(title, media_id, start=0):
+    """The frame for a South Asian film: a page that paints at once.
+
+    Einthusan is the only source with no embed URL of its own, and finding a
+    film there means reading pages until its index answers, so the resolution
+    cannot happen before the title page is drawn or as part of it. This shell
+    appears immediately saying what it is doing; /api/einthusan/<id> does the
+    work and answers with the signed mp4, and the script below plays it with
+    the site's resume and the same PLAYER_EVENT reports the other players send.
+
+    The badge names the language index the film was found in, because a film
+    einthusan carries in more than one is a different dub per index.
+    """
+    start = max(0, int(start or 0))
+    badge = "Einthusan"
+    if start:
+        badge += " &middot; resumed at %d:%02d" % (start // 60, start % 60)
+    script = (
+        "<script>var video=document.getElementById('film'),"
+        "badge=document.getElementById('badge'),"
+        "say=document.getElementById('say'),"
+        "head=document.getElementById('say-head'),"
+        "body=document.getElementById('say-body'),"
+        "start=__START__,media='__MEDIA__';"
+        "function report(status){try{window.parent.postMessage({type:"
+        "'PLAYER_EVENT',data:{player_status:status,"
+        "player_progress:video.currentTime||0,"
+        "player_duration:video.duration||0}},'*')}catch(e){}}"
+        "function fail(message){head.textContent='Not on Einthusan';"
+        "body.textContent=message+' Pick another source under the frame — '"
+        "+'they carry different copies of the same film.';}"
+        "function clock(s){var m=Math.floor(s/60),r=Math.floor(s%60);"
+        "return m+':'+(r<10?'0':'')+r;}"
+        "video.addEventListener('loadedmetadata',function(){"
+        "if(start>0&&start<video.duration-5)video.currentTime=start});"
+        "var last=0;"
+        "video.addEventListener('play',function(){"
+        "setTimeout(function(){badge.className='badge gone'},4000);"
+        "report('playing')});"
+        "video.addEventListener('timeupdate',function(){"
+        "var now=Date.now();if(now-last<5000)return;last=now;"
+        "report('playing')});"
+        "video.addEventListener('seeked',function(){report('seeked')});"
+        "video.addEventListener('pause',function(){report('paused')});"
+        "video.addEventListener('ended',function(){report('completed')});"
+        "fetch('/api/einthusan/'+media,{credentials:'same-origin'})"
+        ".then(function(r){return r.json()})"
+        ".then(function(data){if(!data||!data.url){fail((data&&data.error)||"
+        "'No playable copy of this film right now.');return}"
+        "badge.textContent='Einthusan'+(data.language?"
+        "' \u00b7 '+data.language:'')+"
+        "(start?' \u00b7 resumed at '+clock(start):'');"
+        "video.src=data.url;video.hidden=false;say.hidden=true;video.load()})"
+        ".catch(function(){fail('Einthusan could not be reached just now.')});"
+        "</script>")
+    script = (script.replace("__START__", str(start))
+                    .replace("__MEDIA__", esc(media_id)))
+    body = (
+        "<video id='film' controls playsinline preload='metadata' hidden></video>"
+        '<p class="badge" id="badge">%s</p>'
+        '<div class="say" id="say"><p class="kicker">Einthusan</p>'
+        '<h1 id="say-head">Finding this film</h1>'
+        '<p id="say-body">Einthusan indexes eight languages, so this can take '
+        "a moment.</p></div>%s" % (badge, script))
+    return _standalone("%s &middot; Einthusan" % esc(title or "Film"),
+                       EINTHUSAN_CSS, body)
+
+
+def einthusan_missing(title, reason=""):
+    """Einthusan did not have it: say so where the film would have been."""
+    why = reason or ("Einthusan has no playable copy of&quot;%s&quot; right now."
+                     % esc(title or "this film"))
+    body = (
+        '<div class="say"><p class="kicker">Einthusan</p>'
+        "<h1>Not on Einthusan</h1>"
+        "<p>%s</p><p>Pick another source under the frame — they carry "
+        "different copies of the same film.</p></div>" % why)
+    return _standalone("%s &middot; Einthusan" % esc(title or "Film"),
+                       EINTHUSAN_CSS, body)
 
 
 # --------------------------------------------------------------------------

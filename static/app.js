@@ -690,21 +690,23 @@ function wirePlayer() {
 
 /* ------------------------------------------------------------- player frame */
 
-/* A title page offers four players, because any one of them can be missing
- * a title or fall over mid-film. They are all just a URL in a frame, so this
- * file knows only which one is on and which of them talk back: VidLink and
- * VidSrc.sh both post `PLAYER_EVENT` messages carrying a position and a
- * duration. Listening to those keeps our resume position, watch time and
+/* A title page offers a player per source, because any one of them can be
+ * missing a title or fall over mid-film. They are all just a URL in a frame,
+ * so this file knows only which one is on and which of them talk back: VidLink,
+ * VidSrc.sh and Einthusan post `PLAYER_EVENT` messages carrying a position and
+ * a duration. Listening to those keeps our resume position, watch time and
  * "finished" state working, and the account sync carries them to the other
- * devices. The rest are silent, so watching through one of them does not move
- * continue watching.
+ * devices. CineSrc and VidSrc.mov are silent, so watching through either does
+ * not move continue watching.
  *
- * Some players take a start second in the URL — CineSrc as `t`, VidLink and
- * VidSrc.sh as `startAt` — and the server tags each button with the parameter
- * it wants, so the frame opens where the film was left. VidSrc.mov has none,
- * so it starts at the top. */
+ * Some players take a start second in the URL — CineSrc and Einthusan as `t`,
+ * VidLink and VidSrc.sh as `startAt` — and the server tags each button with the
+ * parameter it wants, so the frame opens where the film was left. VidSrc.mov
+ * has none, so it starts at the top. */
 const VIDLINK_ORIGIN = "https://vidlink.pro";
 const VIDSRC_ORIGIN = "https://vidsrc.sh";
+/* Einthusan has no embed of its own: that frame is a page here, same origin. */
+const SITE_ORIGIN = location.origin;
 /* the source picked last time, so the same one comes back next visit */
 const SOURCE_KEY = "iml:player-source";
 
@@ -914,11 +916,12 @@ function wirePlayer() {
 
   /* VidSrc.sh sends the same `PLAYER_EVENT` type with different field names
    * (`player_status`, `player_progress`, `player_duration`) and its own
-   * statuses, so its reports land on the same two functions above. It is a
-   * second origin, so the frame and the active source are checked again. */
+   * statuses, so its reports land on the same two functions above. Einthusan's
+   * frame is a page of ours and sends exactly the same shape, so both are read
+   * here — each with its own origin, and only while it is the source showing. */
   window.addEventListener("message", function (event) {
-    if (active !== "vidsrc") return;
-    if (event.origin !== VIDSRC_ORIGIN) return;
+    if (active !== "vidsrc" && active !== "einthusan") return;
+    if (event.origin !== VIDSRC_ORIGIN && event.origin !== SITE_ORIGIN) return;
     if (event.source !== frame.contentWindow) return;
     const data = event.data;
     if (!data || data.type !== "PLAYER_EVENT" || !data.data) return;

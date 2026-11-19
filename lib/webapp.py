@@ -20,6 +20,7 @@ from urllib.parse import quote
 from flask import Flask, Response, jsonify, redirect, request
 
 from . import accounts
+from . import einthusan_source
 from . import stremio
 from . import views
 
@@ -247,6 +248,74 @@ def create_app():
         _n, body, _l = views.title_page(item, season, episode, seasons,
                                         by_season)
         return render(item.get("name") or "Title", body)
+
+    # ------------------------------------------------------------ einthusan
+    def einthusan_item(media_id):
+        """The Cinemeta record behind a media id, or None for a bad one."""
+        media_id = (media_id or "").strip()[:40]
+        if not re.match(r"^[A-Za-z0-9:]+$", media_id):
+            return None
+        try:
+            return stremio.meta("movie", media_id)
+        except Exception:
+            return None
+
+    @app.route("/einthusan/<media_id>")
+    def einthusan_frame(media_id):
+        """The frame for a South Asian film.
+
+        Einthusan signs a film per viewing instead of publishing an embed URL,
+        and finding one means reading a few of its index pages, so the picker
+        cannot hold a finished URL. This page paints at once and leaves the
+        work to /api/einthusan, which answers with the signed mp4.
+        """
+        media_id = (media_id or "").strip()[:40]
+        item = einthusan_item(media_id)
+        if not item:
+            return redirect("/search", code=303)
+
+        heading = item.get("name") or "This film"
+        start = max(0, _int_arg(request.args.get("t"), 0))
+        if einthusan_source.offers("movie", item.get("country")):
+            body = views.einthusan_player(heading, media_id, start)
+        else:
+            body = views.einthusan_missing(
+                heading, "Einthusan carries South Asian films, and Cinemeta "
+                "does not list this one as South Asian.")
+        response = Response(body, mimetype="text/html; charset=utf-8")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.route("/api/einthusan/<media_id>")
+    def einthusan_stream(media_id):
+        """The signed mp4 the einthusan frame plays.
+
+        A signature belongs to one viewing and expires within hours, so this
+        is answered fresh (film lookups are the cached part) and never cached.
+        """
+        item = einthusan_item(media_id)
+        if not item:
+            return jsonify({"error": "This film is not in the library."}), 404
+        if not einthusan_source.offers("movie", item.get("country")):
+            return jsonify({"error": "Einthusan carries South Asian films, "
+                                     "and this one is not listed as South "
+                                     "Asian."})
+
+        heading = item.get("name") or ""
+        film = einthusan_source.find(heading, item.get("year"))
+        found = einthusan_source.stream(film["id"]) if film else None
+        if not found:
+            return jsonify({"error": "Einthusan has no playable copy of this "
+                                     "film right now."})
+
+        response = jsonify({
+            "url": found["url"],
+            "language": film.get("lang") or "",
+            "title": found.get("title") or heading,
+            "expires": found.get("expires") or 0,
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     # ---------------------------------------------------------------- misc
     @app.route("/healthz")
