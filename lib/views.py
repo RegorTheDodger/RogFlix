@@ -580,8 +580,19 @@ EINTHUSAN_CSS = (
     ".badge{position:fixed;left:14px;top:12px;margin:0;padding:6px 11px;"
     "border-radius:999px;background:rgba(0,0,0,.6);font-size:11px;"
     "letter-spacing:.08em;text-transform:uppercase;opacity:.92;"
-    "transition:opacity .6s ease;pointer-events:none}"
+    "transition:opacity .6s ease;pointer-events:none;max-width:44%;"
+    "overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
     ".badge.gone{opacity:0}"
+    ".langs{position:fixed;right:12px;top:12px;display:flex;flex-wrap:wrap;"
+    "justify-content:flex-end;gap:6px;max-width:52%;z-index:2}"
+    ".langs button{appearance:none;margin:0;padding:4px 10px;border-radius:999px;"
+    "border:1px solid rgba(243,236,228,.24);background:rgba(0,0,0,.62);"
+    "color:#f3ece4;font:inherit;font-size:11px;letter-spacing:.06em;"
+    "cursor:pointer;transition:border-color .2s ease,color .2s ease}"
+    ".langs button:hover{border-color:rgba(242,163,60,.7)}"
+    ".langs button.on{border-color:#f2a33c;color:#f2a33c}"
+    ".langs button[title]::after{content:' \\2022';color:#f2a33c}"
+    ".langs[aria-busy=true] button{opacity:.55;cursor:default}"
     ".say{position:fixed;inset:0;display:flex;flex-direction:column;"
     "align-items:center;justify-content:center;gap:8px;text-align:center;"
     "padding:24px}"
@@ -615,56 +626,158 @@ def einthusan_player(title, media_id, start=0):
     work and answers with the signed mp4, and the script below plays it with
     the site's resume and the same PLAYER_EVENT reports the other players send.
 
-    The badge names the language index the film was found in, because a film
-    einthusan carries in more than one is a different dub per index.
+    A film einthusan carries in more than one language is a different dub per
+    index, so every index holding it becomes a button across the top: pressing
+    one swaps the stream at the same second, which is the only way to watch a
+    Telugu film that was found in Tamil first. The badge names the language
+    playing and says when it is a dub; the API starts on the film's original
+    language whenever it can tell which index that is.
     """
     start = max(0, int(start or 0))
     badge = "Einthusan"
     if start:
         badge += " &middot; resumed at %d:%02d" % (start // 60, start % 60)
-    script = (
-        "<script>var video=document.getElementById('film'),"
-        "badge=document.getElementById('badge'),"
-        "say=document.getElementById('say'),"
-        "head=document.getElementById('say-head'),"
-        "body=document.getElementById('say-body'),"
-        "start=__START__,media='__MEDIA__';"
-        "function report(status){try{window.parent.postMessage({type:"
-        "'PLAYER_EVENT',data:{player_status:status,"
-        "player_progress:video.currentTime||0,"
-        "player_duration:video.duration||0}},'*')}catch(e){}}"
-        "function fail(message){head.textContent='Not on Einthusan';"
-        "body.textContent=message+' Pick another source under the frame — '"
-        "+'they carry different copies of the same film.';}"
-        "function clock(s){var m=Math.floor(s/60),r=Math.floor(s%60);"
-        "return m+':'+(r<10?'0':'')+r;}"
-        "video.addEventListener('loadedmetadata',function(){"
-        "if(start>0&&start<video.duration-5)video.currentTime=start});"
-        "var last=0;"
-        "video.addEventListener('play',function(){"
-        "setTimeout(function(){badge.className='badge gone'},4000);"
-        "report('playing')});"
-        "video.addEventListener('timeupdate',function(){"
-        "var now=Date.now();if(now-last<5000)return;last=now;"
-        "report('playing')});"
-        "video.addEventListener('seeked',function(){report('seeked')});"
-        "video.addEventListener('pause',function(){report('paused')});"
-        "video.addEventListener('ended',function(){report('completed')});"
-        "fetch('/api/einthusan/'+media,{credentials:'same-origin'})"
-        ".then(function(r){return r.json()})"
-        ".then(function(data){if(!data||!data.url){fail((data&&data.error)||"
-        "'No playable copy of this film right now.');return}"
-        "badge.textContent='Einthusan'+(data.language?"
-        "' \u00b7 '+data.language:'')+"
-        "(start?' \u00b7 resumed at '+clock(start):'');"
-        "video.src=data.url;video.hidden=false;say.hidden=true;video.load()})"
-        ".catch(function(){fail('Einthusan could not be reached just now.')});"
-        "</script>")
+    script = """
+<script>
+var video = document.getElementById('film'),
+    badge = document.getElementById('badge'),
+    say = document.getElementById('say'),
+    head = document.getElementById('say-head'),
+    body = document.getElementById('say-body'),
+    langs = document.getElementById('langs'),
+    start = __START__,
+    media = '__MEDIA__',
+    language = '',
+    resumeAt = start,
+    thenPlay = false;
+
+function report(status) {
+  try {
+    window.parent.postMessage({type: 'PLAYER_EVENT', data: {
+      player_status: status,
+      player_progress: video.currentTime || 0,
+      player_duration: video.duration || 0
+    }}, '*');
+  } catch (e) {}
+}
+
+function fail(message) {
+  head.textContent = 'Not on Einthusan';
+  body.textContent = message + ' Pick another source under the frame — '
+    + 'they carry different copies of the same film.';
+}
+
+function clock(seconds) {
+  var m = Math.floor(seconds / 60), r = Math.floor(seconds % 60);
+  return m + ':' + (r < 10 ? '0' : '') + r;
+}
+
+/* Whether the language playing is the one the film was made in. The answer is
+   empty when nothing knows it, and then the badge only names the language. */
+function mark(data) {
+  if (!data.original || !data.language_code) return '';
+  return data.original === data.language_code ? ' · original' : ' · dub';
+}
+
+/* One button per index einthusan has the film in. A film it carries once has
+   nothing to choose, so the row stays hidden. */
+function paintLanguages(list, active) {
+  langs.innerHTML = '';
+  if (!list || list.length < 2) { langs.hidden = true; return; }
+  for (var i = 0; i < list.length; i++) {
+    var one = list[i], button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = one.name;
+    button.setAttribute('data-lang', one.code);
+    if (one.code === active) button.className = 'on';
+    if (one.original) button.title = 'Original language';
+    langs.appendChild(button);
+  }
+  langs.hidden = false;
+}
+
+function load(code, at, play, first) {
+  var query = code ? '?lang=' + encodeURIComponent(code) : '';
+  langs.setAttribute('aria-busy', 'true');
+  fetch('/api/einthusan/' + media + query, {credentials: 'same-origin'})
+    .then(function (response) { return response.json(); })
+    .then(function (data) {
+      langs.removeAttribute('aria-busy');
+      if (!data || !data.url) {
+        if (video.hidden) {
+          fail((data && data.error) || 'No playable copy of this film right now.');
+        } else {
+          badge.className = 'badge';
+          badge.textContent = 'Einthusan · ' + (code ? 'that language' : 'this copy')
+            + ' is not playable';
+        }
+        return;
+      }
+      language = data.language_code || '';
+      resumeAt = at;
+      thenPlay = play;
+      badge.className = 'badge';
+      badge.textContent = 'Einthusan' + (data.language ? ' · ' + data.language : '')
+        + mark(data) + (first && start ? ' · resumed at ' + clock(start) : '');
+      paintLanguages(data.languages, language);
+      video.src = data.url;
+      video.hidden = false;
+      say.hidden = true;
+      video.load();
+    })
+    .catch(function () {
+      langs.removeAttribute('aria-busy');
+      if (video.hidden) {
+        fail('Einthusan could not be reached just now.');
+      } else {
+        badge.className = 'badge';
+        badge.textContent = 'Einthusan · could not switch just now';
+      }
+    });
+}
+
+video.addEventListener('loadedmetadata', function () {
+  var to = resumeAt;
+  resumeAt = 0;
+  if (to > 0 && (!video.duration || to < video.duration - 5)) {
+    try { video.currentTime = to; } catch (e) {}
+  }
+  if (thenPlay) {
+    thenPlay = false;
+    var started = video.play();
+    if (started && started.catch) started.catch(function () {});
+  }
+});
+video.addEventListener('play', function () {
+  setTimeout(function () { badge.className = 'badge gone'; }, 4000);
+  report('playing');
+});
+var last = 0;
+video.addEventListener('timeupdate', function () {
+  var now = Date.now();
+  if (now - last < 5000) return;
+  last = now;
+  report('playing');
+});
+video.addEventListener('seeked', function () { report('seeked'); });
+video.addEventListener('pause', function () { report('paused'); });
+video.addEventListener('ended', function () { report('completed'); });
+
+langs.addEventListener('click', function (event) {
+  var button = event.target.closest ? event.target.closest('button[data-lang]') : null;
+  if (!button || button.getAttribute('data-lang') === language) return;
+  /* a language swap keeps the seat: same second, same play state */
+  load(button.getAttribute('data-lang'), video.currentTime || 0, !video.paused, false);
+});
+
+load('', start, false, true);
+</script>"""
     script = (script.replace("__START__", str(start))
                     .replace("__MEDIA__", esc(media_id)))
     body = (
         "<video id='film' controls playsinline preload='metadata' hidden></video>"
         '<p class="badge" id="badge">%s</p>'
+        '<nav class="langs" id="langs" aria-label="Language" hidden></nav>'
         '<div class="say" id="say"><p class="kicker">Einthusan</p>'
         '<h1 id="say-head">Finding this film</h1>'
         '<p id="say-body">Einthusan indexes eight languages, so this can take '

@@ -93,9 +93,15 @@ Bhutan, Afghanistan or the Maldives get a fifth source: einthusan, which has no
 embed URL of its own and signs an mp4 per viewing instead. So that button points
 at a page here: it searches einthusan's eight language indexes for the film by
 title and year, plays what it finds in the frame with the site's own resume,
-and names the language index it came from under the player. Films from
-anywhere else never see it, and neither does a series. A film einthusan does
-not have says so in the frame rather than sitting blank.
+and names the language playing under the player. A film einthusan carries in
+more than one language is a different dub in each, so every index holding it
+becomes a button across the top of the frame: pressing one swaps the stream at
+the same second, and the language playing is marked as the original or a dub.
+The default is the film's original language — Cinemeta records a film's
+country but not its language, so Wikipedia's first sentence is asked once per
+film and kept for a week; when it says nothing, the closest title match plays.
+Films from anywhere else never see the source, and neither does a series. A
+film einthusan does not have says so in the frame rather than sitting blank.
 
 **Search.** The search box queries Cinemeta across the whole library and keeps
 only titles that resemble what was typed — punctuation and spacing ignored, so
@@ -166,6 +172,7 @@ rogflix/
 │   ├── players.py          the five sources and their URLs
 │   ├── einthusan.py        einthusan client: search, indexes, signed media
 │   ├── einthusan_source.py finds a South Asian film for the fifth source
+│   ├── language.py        a film's original language, from Wikipedia
 │   ├── accounts.py         users, sessions, signup modes
 │   ├── sync.py             merge rules for the personal state
 │   └── db.py               Postgres/SQLite connection + schema
@@ -246,8 +253,16 @@ knows einthusan's HTML.
 
 **`lib/einthusan_source.py`** — the fifth source's own logic, and the only file
 that decides whether it is offered: the South Asian country check, the search
-across every language index, the title-and-year match that picks one film, and
+across every language index, the title-and-year match that keeps the best entry
+per language (so the frame can offer them all and start on the original), and
 the small memory of hits and misses that keeps a second visit instant.
+
+**`lib/language.py`** — the language a film was made in. Cinemeta has a film's
+country but not its language, and einthusan's index entries do not say whether
+they are a dub, so this asks Wikipedia's search API — no key, one request — for
+the article whose year and title are the film's and reads the language out of
+its first sentence. A miss costs nothing: the frame then starts on whichever
+index matched the title best, and the language buttons are there either way.
 
 **`lib/accounts.py`** — users and sessions. Password hashing (PBKDF2-HMAC-SHA256,
 per-user salt), session token creation and lookup (only the SHA-256 of the token
@@ -420,9 +435,10 @@ The tables are created on first use; there is no migration step.
 - All five sources are third-party. When one is missing a title, or its own
   sources fail, switch source under the frame — this app cannot fix their
   bundles, and only VidLink, VidSrc.sh and einthusan report progress back to it.
-- Einthusan has one entry per language, so a film it carries in several plays
-  the first one found — the badge under the frame says which. Its signed links
-  expire after six hours, and a viewing that outlasts one needs a reload.
+- Einthusan has one entry per language. A film it carries in several starts on
+  the original when Wikipedia names it, and the other indexes are buttons across
+  the frame; a dub with no button is one einthusan does not carry. Its signed
+  links expire after six hours, and a viewing that outlasts one needs a reload.
 - A title Cinemeta has no TMDB id for has no player, and the page says so
   instead of showing an empty frame.
 - Season 0 (specials) is listed but not playable.
