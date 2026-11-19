@@ -2,7 +2,7 @@
 HTML rendering.
 
 Catalogue rows come from the Streaming Catalogs addon; a title's page is built
-from Cinemeta and its playback from CineSrc. Personal data remains in
+from Cinemeta and its playback from VidLink. Personal data remains in
 localStorage for offline browsing and is merged into the account database when
 signed in.
 
@@ -17,7 +17,7 @@ import urllib.parse
 from flask import request
 
 from . import catalog
-from . import cinesrc
+from . import vidlink
 
 NAV = [
     ("/", "Home", "home"),
@@ -277,7 +277,7 @@ def watchlist_page(top_lang="english"):
 
 
 # --------------------------------------------------------------------------
-# library (Cinemeta for metadata, CineSrc for playback)
+# library (Cinemeta for metadata, VidLink for playback)
 # --------------------------------------------------------------------------
 
 
@@ -390,7 +390,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
 
     # Playback is somebody else's player in a frame. Nothing is downloaded,
     # converted or proxied here, which is what makes this work on Vercel too.
-    player = cinesrc.embed_url(kind, item.get("tmdb"), season, episode)
+    player = vidlink.embed_url(kind, item.get("tmdb"), season, episode)
     if player:
         where = ("Season %d, episode %d" % (season, episode)
                  if kind == "series" else "This film")
@@ -399,19 +399,19 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
         gate = (
             '<button class="gate" type="button" data-action="reveal-embed">'
             '<img class="gate-art" src="%s" alt="">'
-            '<span class="gate-play">%s<span>Play on CineSrc</span></span>'
+            '<span class="gate-play">%s<span>Play on VidLink</span></span>'
             "</button>" % (esc(poster or background), ICON_PLAY)
             if (poster or background) else "")
         body.append(
             '<div class="player-wrap"><div class="player embed">'
-            '<iframe id="player" src="%s" data-cinesrc="%s" allowfullscreen'
+            '<iframe id="player" src="%s" data-vidlink="%s" allowfullscreen'
             ' sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"'
             ' allow="autoplay; fullscreen; encrypted-media; picture-in-picture"'
-            ' referrerpolicy="origin" loading="eager" title="%s on CineSrc">'
+            ' referrerpolicy="origin" loading="eager" title="%s on VidLink">'
             '</iframe>%s</div></div>'
             '<div class="stage-under">'
             '<p class="resume" data-role="resume"></p>'
-            '<p class="play-note">%s plays on CineSrc, which remembers your '
+            '<p class="play-note">%s plays on VidLink, which remembers your '
             'place — and so does this site. Its own sources, quality and '
             'subtitles apply. <a href="%s" data-embed-link target="_blank" '
             'rel="noopener noreferrer">Open in a new tab</a> if the frame '
@@ -419,7 +419,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
             % (esc(player), esc(player), esc(where), gate, esc(where),
                esc(player)))
     else:
-        body.append('<p class="play-note">CineSrc plays by TMDB id and '
+        body.append('<p class="play-note">VidLink plays by TMDB id and '
                     'Cinemeta did not return one for this title, so there is '
                     'no player to open.</p>')
     body.append('</div></section>')
@@ -504,7 +504,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
     body.append('</div></div></div>')
 
     body.append('<p class="title-foot">Every detail on this page comes from '
-                'Cinemeta &middot; playback runs in the CineSrc player.</p>')
+                'Cinemeta &middot; playback runs in the VidLink player.</p>')
     body.append('</section>')
 
     # ------------------------------------------------------------- episodes
@@ -687,7 +687,7 @@ def search_page(query, items=(), movies=(), series=(), failed=False):
         '<p class="eyebrow">Search</p>'
         '<h1 class="display">Find something to watch</h1>',
         "Every service on one shelf. A poster opens the film; playback runs "
-        "in the CineSrc player.")]
+        "in the VidLink player.")]
     if movies:
         body.append('<section class="results"><div class="shelf-head">'
                     '<h2>Popular movies</h2></div><div class="grid">%s</div>'

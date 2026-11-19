@@ -690,58 +690,53 @@ function wirePlayer() {
 
 /* ------------------------------------------------------------- player frame */
 
-/* CineSrc is another origin, but a talkative one: it posts `cinesrc:*` events
- * (ready, play, pause, timeupdate, seeked, ended, error, nextepisode) over
- * postMessage. Listening to them keeps our own resume position, watch time and
+/* VidLink is another origin, but a talkative one: it posts `PLAYER_EVENT`
+ * messages (play, pause, seeked, ended, timeupdate) carrying currentTime and
+ * duration. Listening to them keeps our own resume position, watch time and
  * "finished" state working exactly as they do for the Einthusan <video>, and
  * the account sync carries them to the other devices.
  *
- * On open the frame is handed our saved second with ?t= and
- * continueprompt=false, which is the documented way to make it open exactly
- * where this site says, without a second Continue/Restart prompt on top of the
- * note printed below the player.
- *
- * A series can move on to its next episode inside the frame. The page follows
- * that move rather than reloading the player: the address bar, the saved
- * position and the watch time all switch to the episode now playing. */
-const CINESRC_ORIGIN = "https://cinesrc.st";
+ * On open the frame is handed our saved second with ?startAt=, which the
+ * player documents as starting playback there. */
+const VIDLINK_ORIGIN = "https://vidlink.pro";
 
-/* The frame's own controls take their accent from ?color=. The server writes
- * the default saffron into the URL, and the accent picked on /settings
- * replaces it here before the frame is allowed to load — so a blue or green
- * theme no longer plays with an orange scrubber. Nothing is picked for the
- * default theme, so that URL comes back unchanged and the frame never reloads
- * for a second time. */
+/* The player takes its accent from ?primaryColor=, a hex code without the
+ * "#". The server writes the default saffron into the URL, and the accent
+ * picked on /settings replaces it here before the frame is allowed to load —
+ * so a blue or green theme no longer plays with an orange scrubber. Nothing is
+ * picked for the default theme, so that URL comes back unchanged and the frame
+ * never reloads for a second time. */
 function playerAccent() {
   const hex = getComputedStyle(document.documentElement)
     .getPropertyValue("--saffron")
-    .trim();
-  return /^#[0-9a-f]{6}$/i.test(hex) ? hex : "";
+    .trim()
+    .replace(/^#/, "");
+  return /^[0-9a-f]{6}$/i.test(hex) ? hex : "";
 }
 
 function tintPlayer(url) {
   const hex = playerAccent();
   if (!url || !hex) return url;
-  return url.replace(/([?&]color=)[^&]*/i, "$1" + encodeURIComponent(hex));
+  return url.replace(/([?&]primaryColor=)[^&]*/i, "$1" + hex);
 }
 
-function wireCineSrc() {
-  const frame = document.querySelector("iframe[data-cinesrc]");
+function wireVidLink() {
+  const frame = document.querySelector("iframe[data-vidlink]");
   const article = frame && frame.closest("[data-id]");
   if (!frame || !article) return;
 
-  let id = article.dataset.id;
+  const id = article.dataset.id;
 
   /* one URL serves the frame, the bridge and the "new tab" link, and it
    * carries the accent this visitor picked */
-  const base = tintPlayer(frame.dataset.cinesrc);
-  if (base !== frame.dataset.cinesrc) {
-    frame.dataset.cinesrc = base;
+  const base = tintPlayer(frame.dataset.vidlink);
+  if (base !== frame.dataset.vidlink) {
+    frame.dataset.vidlink = base;
     const openTab = document.querySelector("[data-embed-link]");
     if (openTab) openTab.href = base;
   }
 
-  let meta = {
+  const meta = {
     id: id,
     title: article.dataset.title,
     cover: article.dataset.cover,
@@ -755,8 +750,7 @@ function wireCineSrc() {
   const saved = getProgress()[id];
   if (base && saved && saved.seconds && saved.seconds > MIN_SECONDS) {
     const at = Math.floor(saved.seconds);
-    frame.src = base + (base.indexOf("?") === -1 ? "?" : "&") +
-      "t=" + at + "&continueprompt=false";
+    frame.src = base + (base.indexOf("?") === -1 ? "?" : "&") + "startAt=" + at;
     const note = document.querySelector('[data-role="resume"]');
     if (note) {
       note.textContent =
@@ -805,88 +799,38 @@ function wireCineSrc() {
     logTime(now, duration);
   }
 
-  /* The player rolled into another episode inside the frame. Point this page
-   * at the episode that is actually playing, so a refresh reopens it and the
-   * position is filed against the right one. */
-  function followEpisode(season, episode) {
-    season = Number(season) || 0;
-    episode = Number(episode) || 0;
-    if (!season || !episode) return;
-    const parts = id.split(":");
-    if (parts[0] !== "ext" || parts[1] !== "series" || parts.length < 5) return;
-    const next = parts.slice(0, 3).join(":") + ":" + season + ":" + episode;
-    if (next === id) return;
-    id = next;
-    meta = Object.assign({}, meta, {
-      id: id,
-      href: (meta.href || location.pathname).split("?")[0] +
-        "?s=" + season + "&e=" + episode
-    });
-    try {
-      history.replaceState(null, "", meta.href);
-    } catch (e) {
-      /* nothing to update on a page opened from disk */
-    }
-    /* the clock restarts with the new episode: the old one's last second must
-     * not be read as a jump when this one begins at 0:00 */
-    lastTick = 0;
-    lastSave = 0;
-    lastKnown = null;
-    played = 0;
-    const note = document.querySelector('[data-role="resume"]');
-    if (note) {
-      note.textContent = "Now playing season " + season +
-        ", episode " + episode + ".";
-    }
-  }
-
-  function failed() {
-    const note = document.querySelector(".play-note");
-    if (note) {
-      note.textContent = "CineSrc could not start this stream. " +
-        "Try another title, or reload the page.";
-    }
-  }
-
   window.addEventListener("message", function (event) {
     /* the frame we put on the page, and only its own tagged traffic */
-    if (event.origin !== CINESRC_ORIGIN) return;
+    if (event.origin !== VIDLINK_ORIGIN) return;
     if (event.source !== frame.contentWindow) return;
     const data = event.data;
-    if (!data || typeof data.type !== "string") return;
-    if (data.type.indexOf("cinesrc:") !== 0) return;
+    if (!data || data.type !== "PLAYER_EVENT" || !data.data) return;
 
-    const now = Number(data.currentTime) || 0;
-    const duration = Number(data.duration) || 0;
+    const now = Number(data.data.currentTime) || 0;
+    const duration = Number(data.data.duration) || 0;
 
-    switch (data.type) {
-      case "cinesrc:ended":
+    switch (data.data.event) {
+      case "ended":
         markFinished(id, meta);
         paint();
         syncAccount();
         return;
-      case "cinesrc:nextepisode":
-        followEpisode(data.season, data.episode);
-        return;
-      case "cinesrc:error":
-        failed();
-        return;
-      case "cinesrc:play":
-      case "cinesrc:seeked":
+      case "play":
         lastTick = now;
         lastSave = 0;
         logTime(now, duration);
         return;
-      case "cinesrc:pause":
+      case "seeked":
+        /* the jump itself is not watching; the next report starts from here */
+        lastTick = now;
+        lastKnown = { now: now, duration: duration };
+        logTime(now, duration);
+        return;
+      case "pause":
         lastSave = 0;
         tick(now, duration);
         return;
-      case "cinesrc:seeking":
-        /* the jump itself is not watching; the next tick starts from here */
-        lastTick = now;
-        lastKnown = { now: now, duration: duration };
-        return;
-      case "cinesrc:timeupdate":
+      case "timeupdate":
         tick(now, duration);
         return;
       default:
@@ -1182,7 +1126,7 @@ document.querySelectorAll('.search-field input[name="q"]').forEach((input) => {
   if (btn) btn.hidden = !input.value;
 });
 
-/* The CineSrc frame is covered by a poster until it is asked for, so a
+/* The VidLink frame is covered by a poster until it is asked for, so a
  * half-painted player never lands on the page. */
 document.addEventListener("click", function (event) {
   const gate = event.target.closest('[data-action="reveal-embed"]');
@@ -1428,7 +1372,7 @@ wireAuth();
 syncAccount();
 applyTheme(savedTheme());
 wirePlayer();
-wireCineSrc();
+wireVidLink();
 wireRails();
 wireBar();
 wireBillboard();
