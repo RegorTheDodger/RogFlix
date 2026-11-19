@@ -22,14 +22,8 @@ from . import einthusan
 # India, so a film has to be Indian to be there at all.
 INDIA = ("india",)
 
-# A candidate has to be this close to the title, after the year penalty below,
-# for the film to count as found at all.
+# A candidate has to be this close to the title, after the year penalty below.
 GOOD_MATCH = 0.8
-# ...but a language index is kept on a looser score once the film is found
-# somewhere. einthusan shortens titles per index ("Baahubali 2" against
-# "Baahubali 2: The Conclusion"), and dropping those would hide the language
-# the film was actually made in. The year still has to line up.
-LANGUAGE_MATCH = 0.55
 
 # einthusan is read as HTML, so a search is a handful of page fetches. A film
 # found once is kept for the life of its signature; a miss is kept briefly, so
@@ -137,7 +131,7 @@ def _matches(name, year):
             return hit[1]
 
     year_num = _year(year)
-    found, answered = {}, 0
+    best, answered = {}, 0
 
     def scan(term):
         nonlocal answered
@@ -148,30 +142,25 @@ def _matches(name, year):
             answered += 1
             for item in items:
                 score = _score(name, year_num, item)
-                if score < LANGUAGE_MATCH:
+                if score < GOOD_MATCH:
                     continue
-                if lang not in found or score > found[lang][0]:
-                    found[lang] = (score, item)
-
-    def best_score():
-        return max((score for score, _item in found.values()), default=0.0)
+                if lang not in best or score > best[lang][0]:
+                    best[lang] = (score, item)
 
     scan(name.strip())
     # nothing close anywhere: ask once more under the title's first word, which
     # is how a catalogue title with a subtitle or a dash still finds its index
     # entry
-    if best_score() < GOOD_MATCH:
+    if not best:
         head = _first_word(name)
         if head:
             scan(head)
 
-    if best_score() < GOOD_MATCH:
-        matches = {}
-    else:
-        matches = {lang: found[lang][1] for lang in einthusan.LANG_CODES
-                   if lang in found}
+    matches = {lang: best[lang][1] for lang in einthusan.LANG_CODES
+               if lang in best}
     if matches:
-        _remember(name, year, matches)
+        with _lock:
+            _found[key] = (now + HIT_TTL, matches)
         return matches
 
     # A title that really is not there is worth a short memory; a request that
@@ -180,38 +169,6 @@ def _matches(name, year):
     if answered:
         with _lock:
             _found[key] = (now + MISS_TTL, None)
-    return None
-
-
-def _remember(name, year, matches):
-    key = ("%s|%s" % (name, year)).strip().lower()
-    with _lock:
-        _found[key] = (time.time() + HIT_TTL, matches)
-
-
-def _extra_language(name, year, lang):
-    """One more look in the language the film was made in.
-
-    einthusan shortens a title in some indexes, and the title that found the
-    Tamil entry can miss the Telugu one completely, so the film's own language
-    is not in what the first pass found. This asks that single index, first
-    under the whole title and then under its first word: two requests at most,
-    and only when the answer matters.
-    """
-    year_num = _year(year)
-    for term in (name.strip(), _first_word(name)):
-        if not term:
-            continue
-        items = _page(term, lang)
-        if not items:
-            continue
-        best = None
-        for item in items:
-            score = _score(name, year_num, item)
-            if score >= LANGUAGE_MATCH and (best is None or score > best[0]):
-                best = (score, item)
-        if best:
-            return best[1]
     return None
 
 
@@ -228,17 +185,6 @@ def find(name, year, prefer=""):
         return None
 
     prefer = (prefer or "").strip().lower()
-    if prefer and prefer not in matches:
-        # the film was found, but not in the language it was made in: that
-        # index spells the title differently, and it is worth one look
-        extra = _extra_language(name, year, prefer)
-        if extra:
-            merged = dict(matches)
-            merged[prefer] = extra
-            matches = {code: merged[code] for code in einthusan.LANG_CODES
-                       if code in merged}
-            _remember(name, year, matches)
-
     if prefer in matches:
         pick = prefer
     else:

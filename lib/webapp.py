@@ -24,8 +24,7 @@ from flask import Flask, Response, jsonify, redirect, request
 
 from . import accounts
 from . import einthusan_source
-from . import film_cache
-from . import limits
+from . import language
 from . import players
 from . import stremio
 from . import views
@@ -283,16 +282,8 @@ def create_app():
                 if not any(one["episode"] == episode for one in current):
                     episode = current[0]["episode"]
 
-        # What einthusan already knows about this film, and a scan started now
-        # so the fifth source's frame opens on an answer instead of on eight
-        # index pages being read one after another.
-        known = None
-        if kind == "movie" and einthusan_source.offers(kind, item.get("country")):
-            film_cache.prewarm(media_id, item.get("name") or "", item.get("year"))
-            known = film_cache.peek(media_id)
-
         _n, body, _l = views.title_page(item, season, episode, seasons,
-                                        by_season, einthusan=known)
+                                        by_season)
         return render(item.get("name") or "Title", body)
 
     # ------------------------------------------------------------ einthusan
@@ -337,7 +328,7 @@ def create_app():
         """The signed mp4 the einthusan frame plays.
 
         A signature belongs to one viewing and expires within hours, so this
-        is answered fresh (film lookups are the cached part) and never cached.
+        is answered fresh and never cached.
         """
         item = einthusan_item(media_id)
         if not item:
@@ -348,46 +339,24 @@ def create_app():
 
         heading = item.get("name") or ""
         year = item.get("year")
-        record = film_cache.peek(media_id)
-        if not record:
-            # One scan reads a page per language, so it gets a budget per
-            # address and a place in a short queue: a burst from one visitor
-            # makes einthusan answer with thin pages that find nothing, for
-            # everybody.
-            address = (request.headers.get("X-Forwarded-For", "")
-                       .split(",")[0].strip() or request.remote_addr or "")
-            allowed, wait = limits.allow("einthusan:" + address, 30, 60)
-            if not allowed:
-                response = jsonify({"error": "Too many tries just now — "
-                                             "give it a minute."})
-                response.status_code = 429
-                response.headers["Retry-After"] = str(wait)
-                return response
-            try:
-                with limits.scan_slot():
-                    record = film_cache.warm(media_id, heading, year)
-            except (limits.Busy, film_cache.Busy):
-                return jsonify({"error": "Einthusan is busy right now — try "
-                                         "again in a moment."}), 503
-
-        matches = record.get("matches") or {}
-        original = record.get("original") or ""
-        if not matches:
+        have = einthusan_source.find(heading, year)
+        original = ""
+        if have and len(have["by_lang"]) > 1:
+            # A film einthusan carries in several languages is a different dub
+            # in each, and the index that matched the title best is as likely
+            # to be one of them as the original. Wikipedia names the language
+            # the film was made in; when einthusan has that index, start there
+            # and let the frame's language buttons offer the rest.
+            original = language.original(heading, year)
+            if original:
+                have = einthusan_source.find(heading, year, prefer=original)
+        if not have:
             return jsonify({"error": "Einthusan has no playable copy of this "
                                      "film right now."})
 
-        # The requested language wins, then the one the film was made in, then
-        # the index whose title matched best.
         wanted = (request.args.get("lang") or "").strip().lower()
-        if wanted in matches:
-            code = wanted
-        elif original in matches:
-            code = original
-        else:
-            code = record.get("pick") if record.get("pick") in matches \
-                else next(iter(matches))
-
-        film = matches[code]
+        code = wanted if wanted in have["by_lang"] else have["pick"]
+        film = have["by_lang"][code]
         found = einthusan_source.stream(film["id"])
         if not found:
             return jsonify({"error": "Einthusan's copy of this film will not "
@@ -399,9 +368,10 @@ def create_app():
             "language_code": code,
             "original": original,
             "languages": [{"code": key,
-                           "name": matches[key].get("lang") or key.title(),
+                           "name": have["by_lang"][key].get("lang")
+                                   or key.title(),
                            "original": key == original}
-                          for key in matches],
+                          for key in have["by_lang"]],
             "title": found.get("title") or heading,
             "expires": found.get("expires") or 0,
         })

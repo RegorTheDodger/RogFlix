@@ -114,15 +114,6 @@ class Find(unittest.TestCase):
     def test_a_film_that_is_not_there_is_not_invented(self):
         self.assertIsNone(einthusan_source.find("Nothing Here", 1999))
 
-    def test_a_shortened_title_still_offers_its_language(self):
-        plain = einthusan_source.find("Baahubali 2: The Conclusion", 2017)
-        self.assertNotIn("telugu", plain["by_lang"])
-        found = einthusan_source.find("Baahubali 2: The Conclusion", 2017,
-                                      prefer="telugu")
-        self.assertIn("telugu", found["by_lang"])
-        self.assertEqual(found["pick"], "telugu")
-        self.assertEqual(list(found["by_lang"]), ["tamil", "telugu"])
-
 
 class LanguageParsing(unittest.TestCase):
     """Reading the language out of a Wikipedia film article."""
