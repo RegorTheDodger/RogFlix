@@ -2,9 +2,9 @@
 HTML rendering.
 
 Catalogue rows come from the Streaming Catalogs addon; a title's page is built
-from Cinemeta and its playback from VidLink. Personal data remains in
-localStorage for offline browsing and is merged into the account database when
-signed in.
+from Cinemeta and its playback from the chain of players in lib/players.py.
+Personal data remains in localStorage for offline browsing and is merged into
+the account database when signed in.
 
 Markup follows the class names in style.css. Rails are filled from app.js;
 everything server-rendered is static HTML so the page paints without JS.
@@ -17,7 +17,7 @@ import urllib.parse
 from flask import request
 
 from . import catalog
-from . import vidlink
+from . import players
 
 NAV = [
     ("/", "Home", "home"),
@@ -277,7 +277,7 @@ def watchlist_page(top_lang="english"):
 
 
 # --------------------------------------------------------------------------
-# library (Cinemeta for metadata, VidLink for playback)
+# library (Cinemeta for metadata, a chosen player for playback)
 # --------------------------------------------------------------------------
 
 
@@ -390,8 +390,12 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
 
     # Playback is somebody else's player in a frame. Nothing is downloaded,
     # converted or proxied here, which is what makes this work on Vercel too.
-    player = vidlink.embed_url(kind, item.get("tmdb"), season, episode)
-    if player:
+    # One title is rarely on every service, so the first player loads and the
+    # rest sit under it as a picker.
+    found = players.sources(kind, item.get("id"), item.get("tmdb"), season,
+                            episode)
+    if found:
+        first = found[0]
         where = ("Season %d, episode %d" % (season, episode)
                  if kind == "series" else "This film")
         # The frame takes a moment to paint, which reads as a broken player.
@@ -399,28 +403,40 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
         gate = (
             '<button class="gate" type="button" data-action="reveal-embed">'
             '<img class="gate-art" src="%s" alt="">'
-            '<span class="gate-play">%s<span>Play on VidLink</span></span>'
+            '<span class="gate-play">%s<span>Play</span></span>'
             "</button>" % (esc(poster or background), ICON_PLAY)
             if (poster or background) else "")
+        # static/app.js loads whichever button is on, so each one carries the
+        # URL its own player understands, plus the start-second parameter it
+        # documents (empty for the players that have none).
+        pickers = "".join(
+            '<button class="source-btn%s" type="button" data-source="%s"'
+            ' data-src="%s" data-origin="%s" data-resume="%s"'
+            ' aria-pressed="%s">%s</button>'
+            % (" on" if index == 0 else "", esc(one["key"]), esc(one["url"]),
+               esc(one["origin"]), esc(one["resume"]),
+               "true" if index == 0 else "false", esc(one["name"]))
+            for index, one in enumerate(found))
         body.append(
             '<div class="player-wrap"><div class="player embed">'
-            '<iframe id="player" src="%s" data-vidlink="%s" allowfullscreen'
+            '<iframe id="player" src="%s" data-player="%s" allowfullscreen'
             ' allow="autoplay; fullscreen; encrypted-media; picture-in-picture"'
-            ' loading="eager" title="%s on VidLink">'
+            ' loading="eager" title="%s">'
             '</iframe>%s</div></div>'
             '<div class="stage-under">'
+            '<div class="sources" role="group" aria-label="Playback source">'
+            '<span class="sources-label">Source</span>%s</div>'
             '<p class="resume" data-role="resume"></p>'
-            '<p class="play-note">%s plays on VidLink, which remembers your '
-            'place — and so does this site. Its own sources, quality and '
-            'subtitles apply. <a href="%s" data-embed-link target="_blank" '
-            'rel="noopener noreferrer">Open in a new tab</a> if the frame '
-            'stays blank.</p></div>'
-            % (esc(player), esc(player), esc(where), gate, esc(where),
-               esc(player)))
+            '<p class="play-note">%s from <b data-role="source-name">%s</b>.'
+            ' If the frame stays blank, pick another source — they carry'
+            ' different copies of the same title. <a href="%s"'
+            ' data-embed-link target="_blank" rel="noopener noreferrer">'
+            'Open in a new tab</a> if this one will not play.</p></div>'
+            % (esc(first["url"]), esc(first["key"]), esc(where), gate,
+               pickers, esc(where), esc(first["name"]), esc(first["url"])))
     else:
-        body.append('<p class="play-note">VidLink plays by TMDB id and '
-                    'Cinemeta did not return one for this title, so there is '
-                    'no player to open.</p>')
+        body.append('<p class="play-note">No player for this title: Cinemeta '
+                    'did not return an id any of the players key on.</p>')
     body.append('</div></section>')
 
     # ---------------------------------------------------------------- sheet
@@ -503,7 +519,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
     body.append('</div></div></div>')
 
     body.append('<p class="title-foot">Every detail on this page comes from '
-                'Cinemeta &middot; playback runs in the VidLink player.</p>')
+                'Cinemeta &middot; playback runs in the player you pick.</p>')
     body.append('</section>')
 
     # ------------------------------------------------------------- episodes
@@ -686,7 +702,7 @@ def search_page(query, items=(), movies=(), series=(), failed=False):
         '<p class="eyebrow">Search</p>'
         '<h1 class="display">Find something to watch</h1>',
         "Every service on one shelf. A poster opens the film; playback runs "
-        "in the VidLink player.")]
+        "in the player you pick.")]
     if movies:
         body.append('<section class="results"><div class="shelf-head">'
                     '<h2>Popular movies</h2></div><div class="grid">%s</div>'

@@ -11,8 +11,9 @@
 
 RogFlix puts everything the big streaming services are carrying on one shelf.
 It reads the Streaming Catalogs addon — 35 services, films and series — paints a
-home page of service-by-service rows, and plays any title through the VidLink
-player. Search, My List, continue watching and an account that merges those
+home page of service-by-service rows, and plays any title through one of five
+players — CineSrc, VidLink, VidSrc.sh, VidSrc.mov or AutoEmbed — picked under
+the frame. Search, My List, continue watching and an account that merges those
 shelves between devices are all included.
 
 The app is Flask with server-rendered HTML, a small vanilla-JavaScript layer for
@@ -48,8 +49,11 @@ locally) for accounts. No build step, no client-side framework.
 - **A real title page.** Poster, backdrop, synopsis, cast, crew, runtime, rating,
   awards, trailer and the full episode list — none of which the catalogue addon
   itself provides.
-- **Playback that resumes.** Films and single episodes open in VidLink at the
-  second you left them.
+- **Five players, one picker.** CineSrc, VidLink, VidSrc.sh, VidSrc.mov and
+  AutoEmbed under every title page, so a service missing the film is one click
+  from the next.
+- **Playback that resumes.** Films and single episodes open in CineSrc or
+  VidLink at the second you left them.
 - **My List and continue watching** that work signed out and keep working on a
   phone and a laptop once you sign in.
 
@@ -69,13 +73,17 @@ carries, which is also where the TMDB id for playback comes from. A card opens
 its own page without a lookup; the poster, backdrop, cast, runtime, rating,
 trailer and episode list all arrive together.
 
-**Watching.** A title page carries the VidLink embed, which is keyed by TMDB id
-— a film at `/movie/<tmdb>`, an episode at `/tv/<tmdb>/<season>/<episode>`. The
-frame is covered by the poster until you press play. A series opens on its first
-real season; season 0 is the specials list, which has no episode to play. The
-player posts its position as it goes, so the resume point and the watch time
-stay in this app, and a series shows the player's own next-episode button near
-the end of an episode.
+**Watching.** A title page carries a player and a picker under it: CineSrc,
+VidLink, VidSrc.sh, VidSrc.mov and AutoEmbed, in that order. CineSrc and VidLink
+key on the TMDB id — a film at `/movie/<tmdb>`, an episode at
+`/tv/<tmdb>/<season>/<episode>` — while the other three take a TMDB or an IMDb
+id, so a title Cinemeta knows without a `moviedb_id` still plays. The choice is
+kept in the browser and comes back on the next visit. The frame is covered by
+the poster until you press play, and a series opens on its first real season,
+since season 0 is the specials list and has no episode to play. VidLink reports
+its position as it goes, so the resume point and the watch time keep moving
+while it is the source in use, and a series there shows the player's own
+next-episode button near the end of an episode.
 
 **Search.** The search box queries Cinemeta across the whole library and keeps
 only titles that resemble what was typed — punctuation and spacing ignored, so
@@ -143,7 +151,7 @@ rogflix/
 │   ├── views.py            all HTML rendering
 │   ├── stremio.py          Cinemeta client + search + metadata cache
 │   ├── catalog.py          Streaming Catalogs client (home rows)
-│   ├── vidlink.py          VidLink player URLs
+│   ├── players.py          the five players and their embed URLs
 │   ├── accounts.py         users, sessions, signup modes
 │   ├── sync.py             merge rules for the personal state
 │   └── db.py               Postgres/SQLite connection + schema
@@ -209,10 +217,11 @@ the browser keeps ten from the rows it still shows; hiding every film row leaves
 the search banner in place of the hero. Row ids are service-based (`catalog-movie-nfx`)
 rather than positional, so settings can hide or reorder them safely.
 
-**`lib/vidlink.py`** — the player. Turns a TMDB id and an optional season/episode
-into a VidLink embed URL, adding the default accent colour, the next-episode
-button on a series, and — when resuming — `startAt` so the frame opens where the
-page says.
+**`lib/players.py`** — the players. Turns a title's TMDB and IMDb ids and an
+optional season/episode into one embed URL per service — CineSrc, VidLink,
+VidSrc.sh, VidSrc.mov, AutoEmbed — in the order the page offers them, adding the
+accent colour where a player accepts one, the next-episode button on a VidLink
+series, and the query parameter each one takes for a start second.
 
 **`lib/accounts.py`** — users and sessions. Password hashing (PBKDF2-HMAC-SHA256,
 per-user salt), session token creation and lookup (only the SHA-256 of the token
@@ -230,9 +239,10 @@ wrapper used everywhere, and creates the tables on first use. This is the only
 file that knows a database dialect.
 
 **`static/app.js`** — the browser side: localStorage for My List, resume points
-and watch time, painting those shelves, the VidLink `PLAYER_EVENT` bridge (play,
-pause, seeked, timeupdate, ended), the frame's `primaryColor` parameter retinted
-to the theme picked on settings, the poster gate, rail scrolling,
+and watch time, painting those shelves, the source picker under the player and
+the VidLink `PLAYER_EVENT` bridge (play, pause, seeked, timeupdate, ended), each
+player's accent parameter retinted to the theme picked on settings, the poster
+gate, rail scrolling,
 search-box behaviour, the account/sync calls, the home-row order stored by
 settings, and the hero carousel: which rows its films come from, the hold
 between films and the countdown under them.
@@ -340,8 +350,8 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 ```
 
 - Press the + on any poster to add it to My List.
-- Press Play on a title page to reveal the VidLink frame; it opens at your saved
-  second.
+- Press Play on a title page to reveal the player; it opens at your saved second
+  in CineSrc or VidLink. If a source will not load, pick another under the frame.
 - Watch ten seconds and the title appears under Continue watching.
 - In `/settings`, under **Home page rows**, untick a row or move it with the
   arrows; the home page follows on the next load.
@@ -379,8 +389,9 @@ The tables are created on first use; there is no migration step.
 
 **Known issues**
 
-- VidLink is a third-party player. When one of its sources fails, pick another
-  source in its own menu or reload — this app cannot fix their bundle.
+- All five players are third-party. When one is missing a title, or its own
+  sources fail, switch source under the frame — this app cannot fix their
+  bundles, and only VidLink reports progress back to it.
 - A title Cinemeta has no TMDB id for has no player, and the page says so
   instead of showing an empty frame.
 - Season 0 (specials) is listed but not playable.
