@@ -1,9 +1,9 @@
 """
-Einthusan as a source of its own, for South Asian films.
+Einthusan as a source of its own, for Indian films.
 
 The other players publish an embed URL that can be built from an id. Einthusan
 does not: it signs an mp4 for one viewing, so the only way in is its own watch
-page. This module bridges that — a film Cinemeta says is from South Asia gets a
+page. This module bridges that — a film Cinemeta says is from India gets a
 fifth button whose URL is a page on this site, and that page searches einthusan
 by title and year, signs the file and plays it in the frame.
 
@@ -18,9 +18,9 @@ import time
 
 from . import einthusan
 
-# Countries einthusan draws its eight languages from.
-SOUTH_ASIAN = ("india", "pakistan", "bangladesh", "sri lanka", "nepal",
-               "bhutan", "afghanistan", "maldives")
+# einthusan indexes eight Indian languages and carries nothing from outside
+# India, so a film has to be Indian to be there at all.
+INDIA = ("india",)
 
 # A candidate has to be this close to the title, after the year penalty below.
 GOOD_MATCH = 0.8
@@ -42,17 +42,17 @@ _lock = threading.Lock()
 _found = {}
 
 
-def is_south_asian(country):
+def is_indian(country):
     """Cinemeta writes country as "India" or "India, United States"."""
     for part in str(country or "").replace(";", ",").split(","):
-        if part.strip().lower() in SOUTH_ASIAN:
+        if part.strip().lower() in INDIA:
             return True
     return False
 
 
 def offers(kind, country):
-    """What the picker asks: films from South Asia, and nothing else."""
-    return kind == "movie" and is_south_asian(country)
+    """What the picker asks: films from India, and nothing else."""
+    return kind == "movie" and is_indian(country)
 
 
 def player_path(imdb_id):

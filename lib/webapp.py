@@ -263,7 +263,7 @@ def create_app():
 
     @app.route("/einthusan/<media_id>")
     def einthusan_frame(media_id):
-        """The frame for a South Asian film.
+        """The frame for an Indian film.
 
         Einthusan signs a film per viewing instead of publishing an embed URL,
         and finding one means reading a few of its index pages, so the picker
@@ -281,8 +281,8 @@ def create_app():
             body = views.einthusan_player(heading, media_id, start)
         else:
             body = views.einthusan_missing(
-                heading, "Einthusan carries South Asian films, and Cinemeta "
-                "does not list this one as South Asian.")
+                heading, "Einthusan carries Indian films, and Cinemeta "
+                "does not list this one as Indian.")
         response = Response(body, mimetype="text/html; charset=utf-8")
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -298,9 +298,8 @@ def create_app():
         if not item:
             return jsonify({"error": "This film is not in the library."}), 404
         if not einthusan_source.offers("movie", item.get("country")):
-            return jsonify({"error": "Einthusan carries South Asian films, "
-                                     "and this one is not listed as South "
-                                     "Asian."})
+            return jsonify({"error": "Einthusan carries Indian films, and "
+                                     "this one is not listed as Indian."})
 
         heading = item.get("name") or ""
         year = item.get("year")

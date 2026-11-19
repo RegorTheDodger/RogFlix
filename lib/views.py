@@ -617,7 +617,7 @@ def _standalone(head_html, css, body):
 
 
 def einthusan_player(title, media_id, start=0):
-    """The frame for a South Asian film: a page that paints at once.
+    """The frame for an Indian film: a page that paints at once.
 
     Einthusan is the only source with no embed URL of its own, and finding a
     film there means reading pages until its index answers, so the resolution

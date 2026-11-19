@@ -1,9 +1,9 @@
 """
 The language a film was made in.
 
-Cinemeta knows a film's country but not its language, so a South Asian film
-that einthusan carries in several languages has no local way to say which
-index is the original and which is a dub. Wikipedia writes it into the first
+Cinemeta knows a film's country but not its language, so an Indian film that
+einthusan carries in several languages has no local way to say which index is
+the original and which is a dub. Wikipedia writes it into the first
 line of every film article ("RRR is a 2022 Indian Telugu-language epic ..."),
 and its search API needs no key, so one search settles it.
 
