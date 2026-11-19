@@ -51,8 +51,8 @@ locally) for accounts. No build step, no client-side framework.
   itself provides.
 - **Five sources, one picker.** CineSrc, VidLink, VidSrc.sh and VidSrc.mov
   under every title page, so a service missing the film is
-  one click from the next. Films from South Asia get einthusan as a fifth
-  source, and only those films do.
+  one click from the next. Films Cinemeta lists as Indian get einthusan as a
+  fifth source, and only those films do.
 - **Playback that resumes.** Films and single episodes open in CineSrc,
   VidLink, VidSrc.sh or einthusan at the second you left them.
 - **My List and continue watching** that work signed out and keep working on a
@@ -88,9 +88,9 @@ position as it goes, so the resume point and the watch time keep moving
 while either is the source in use, and a series on VidLink shows the player's own
 next-episode button near the end of an episode.
 
-**Einthusan.** Films from India, Pakistan, Bangladesh, Sri Lanka, Nepal,
-Bhutan, Afghanistan or the Maldives get a fifth source: einthusan, which has no
-embed URL of its own and signs an mp4 per viewing instead. So that button points
+**Einthusan.** Indian films get a fifth source: einthusan, which has no embed
+URL of its own and signs an mp4 per viewing instead — it indexes eight Indian
+languages and carries nothing from outside India. So that button points
 at a page here: it searches einthusan's eight language indexes for the film by
 title and year, plays what it finds in the frame with the site's own resume,
 and names the language playing under the player. A film einthusan carries in
@@ -171,7 +171,7 @@ rogflix/
 │   ├── catalog.py          Streaming Catalogs client (home rows)
 │   ├── players.py          the five sources and their URLs
 │   ├── einthusan.py        einthusan client: search, indexes, signed media
-│   ├── einthusan_source.py finds a South Asian film for the fifth source
+│   ├── einthusan_source.py finds an Indian film for the fifth source
 │   ├── language.py        a film's original language, from Wikipedia
 │   ├── accounts.py         users, sessions, signup modes
 │   ├── sync.py             merge rules for the personal state
@@ -243,7 +243,7 @@ optional season/episode into one URL per service — CineSrc, VidLink, VidSrc.sh
 VidSrc.mov, einthusan — in the order the page offers them,
 adding the accent colour where a player accepts one, the next-episode button on
 a VidLink series, and the query parameter each one takes for a start second.
-Einthusan is gated: it is offered only for films Cinemeta lists as South Asian.
+Einthusan is gated: it is offered only for films Cinemeta lists as Indian.
 
 **`lib/einthusan.py`** — the einthusan client, taken from the EinthuFlix app.
 It reads the eight language indexes, searches them (with a shorter-prefix
@@ -252,7 +252,7 @@ re-caching a signature shortly before it expires. Nothing else in the site
 knows einthusan's HTML.
 
 **`lib/einthusan_source.py`** — the fifth source's own logic, and the only file
-that decides whether it is offered: the South Asian country check, the search
+that decides whether it is offered: the India-only country check, the search
 across every language index, the title-and-year match that keeps the best entry
 per language (so the frame can offer them all and start on the original), and
 the small memory of hits and misses that keeps a second visit instant.

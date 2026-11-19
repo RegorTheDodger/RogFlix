@@ -14,7 +14,7 @@ title into one URL per service, in the order the title page offers them:
                 https://vidsrc.sh/embed/tv/{id}/{season}/{episode}
     VidSrc.mov  https://vidsrc.mov/embed/movie/{id}
                 https://vidsrc.mov/embed/tv/{id}/{season}/{episode}
-    Einthusan   /einthusan/{imdb}      South Asian films only
+    Einthusan   /einthusan/{imdb}      Indian films only
 
 CineSrc and VidLink are keyed by TMDB id only; the VidSrc pair takes a TMDB id
 or an IMDb one, so a title Cinemeta knows without a `moviedb_id` still has a
@@ -22,9 +22,9 @@ player.
 
 Einthusan signs an mp4 per viewing instead of publishing an embed URL, so that
 last entry points at a page here (lib/einthusan_source.py resolves the film and
-plays it). It is offered only for films whose country Cinemeta reports as South
-Asian: einthusan has no series and nothing from anywhere else, so the button is
-left out rather than opening on an empty frame.
+plays it). It is offered only for films whose country Cinemeta reports as
+Indian: einthusan has no series and nothing from anywhere else, so the button
+is left out rather than opening on an empty frame.
 
 One title rarely exists on every service, and any of them can fall over
 mid-film, so the page shows the list and lets the viewer pick. The order here
@@ -123,7 +123,7 @@ def _einthusan(kind, tmdb, imdb, season, episode):
     return einthusan_source.player_path(imdb) if imdb else ""
 
 
-def _south_asian_films(kind, country):
+def _indian_films(kind, country):
     return einthusan_source.offers(kind, country)
 
 
@@ -141,7 +141,7 @@ SOURCES = (
      "resume": "", "build": _vidsrc_mov},
     # last because it is the one source that has to be found before it plays
     {"key": "einthusan", "name": "Einthusan", "origin": "",
-     "resume": "t", "build": _einthusan, "gate": _south_asian_films},
+     "resume": "t", "build": _einthusan, "gate": _indian_films},
 )
 
 
@@ -150,7 +150,7 @@ def sources(kind, imdb_id, tmdb_id, season=0, episode=0, country=""):
 
     A title with no id any of them understands gets an empty list, and the
     page says so rather than showing an empty frame. `country` is Cinemeta's,
-    and only decides whether the South Asian-only source is offered.
+    and only decides whether the India-only source is offered.
     """
     tmdb = _tmdb_id(tmdb_id)
     imdb = _imdb_id(imdb_id)
