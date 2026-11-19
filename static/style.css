@@ -2126,3 +2126,140 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
 .play-hint[hidden] {
   display: none;
 }
+
+/* The pause control is an icon, so it keeps the same shape in either state. */
+.bb-pause {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 9px;
+  line-height: 0;
+}
+.bb-pause svg { display: block; width: 15px; height: 15px; }
+.bb-pause [data-bb-icon][hidden] { display: none; }
+
+/* Where you were, and the two things you might want to do about it. */
+.resume-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+}
+.resume-panel[hidden] { display: none; }
+.resume-line {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--saffron);
+}
+.resume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.resume-btn,
+.share-btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper-dim);
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: border-color .2s ease, color .2s ease;
+}
+.resume-btn:hover,
+.resume-btn:focus-visible,
+.share-btn:hover,
+.share-btn:focus-visible {
+  border-color: var(--saffron);
+  color: var(--saffron);
+}
+.share-btn { margin-top: 14px; }
+.jump { display: inline-flex; align-items: center; gap: 6px; }
+.jump label { font-size: 11.5px; color: var(--paper-faint); }
+.jump input {
+  width: 6.5em;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .35);
+  color: var(--paper);
+  font: inherit;
+  font-size: 12px;
+}
+.jump input:focus { outline: 2px solid var(--saffron); outline-offset: 1px; }
+
+/* Shown when a player reports the end: the next episode, or the same shelf. */
+.up-next {
+  max-width: var(--read-max);
+  margin: clamp(24px, 4vw, 40px) auto 0;
+  padding: 0 var(--gutter);
+}
+.up-next[hidden] { display: none; }
+.up-next-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+.up-next-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.up-next-head p { margin: 0; font-size: 12.5px; color: var(--paper-faint); }
+.up-next-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(132px, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.up-next-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--paper-dim);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.up-next-card img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .04);
+}
+.up-next-card:hover span,
+.up-next-card:focus-visible span { color: var(--saffron); }
+.up-next-episode {
+  align-self: start;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.up-next-episode:hover,
+.up-next-episode:focus-visible {
+  border-color: var(--saffron);
+  color: var(--saffron);
+}

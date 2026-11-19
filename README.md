@@ -409,6 +409,7 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 /einthusan/tt1745960?t=300         the fifth source's frame, at 5:00
 /einthusan/tt1745960?lang=tamil    the same, in Tamil
 /api/status                        whether each player answers, cached 5 min
+/api/up-next/movie/tt1745960       what to watch after it, by genre
 /watchlist                         My List
 /settings                          account, home rows, stored data
 /healthz                           JSON: database dialect and app state
@@ -418,8 +419,15 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 - Press Play on a title page to reveal the player; it opens at your saved second
   in CineSrc, VidLink, VidSrc.sh or einthusan. If a source will not load, pick
   another under the frame, and the page says so if nothing loads at all.
-- The hero carousel has a Pause button, and it starts paused when the system
-  asks for reduced motion.
+- The hero carousel has a pause button (an icon, not a word), and it starts
+  paused when the system asks for reduced motion.
+- A title you were part-way through opens with a card that says where you were,
+  with Start over, a Jump to box (`42:10` or a number of seconds) and a Share
+  button. The link it copies carries that second and, inside the einthusan
+  frame, the language, so whoever opens it starts in the same place, in the same
+  language.
+- When a player reports the end, an Up next row appears under the frame: the
+  next episode, and a dozen titles from the same genres.
 - In the einthusan frame, the language buttons switch the copy at the same
   second; the choice is remembered for that film, and the address keeps it, so a
   reload or a shared link plays the same language.

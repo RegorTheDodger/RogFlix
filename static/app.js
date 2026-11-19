@@ -536,7 +536,12 @@ function wireBillboard() {
     pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
     pauseBtn.setAttribute("aria-label",
       paused ? "Play the carousel" : "Pause the carousel");
-    pauseBtn.textContent = paused ? "Play" : "Pause";
+    const showing = pauseBtn.querySelector(
+      paused ? '[data-bb-icon="play"]' : '[data-bb-icon="pause"]'
+    );
+    pauseBtn.querySelectorAll("[data-bb-icon]").forEach((icon) => {
+      icon.hidden = icon !== showing;
+    });
   }
 
   function show(next, byHand) {
@@ -798,6 +803,14 @@ function wirePlayer() {
   const note = document.querySelector('[data-role="resume"]');
   const label = document.querySelector('[data-role="source-name"]');
   const stuck = document.querySelector('[data-role="stuck"]');
+  const panel = document.querySelector('[data-role="resume-panel"]');
+  const jumpField = document.querySelector('[data-role="jump"]');
+  const shareBtn = document.querySelector('[data-role="share"]');
+  const upNext = document.querySelector('[data-role="up-next"]');
+  const upNextRow = document.querySelector('[data-role="up-next-row"]');
+  const upNextNote = document.querySelector('[data-role="up-next-note"]');
+  const mediaId = article.dataset.media || "";
+  const mediaKind = article.dataset.kind === "series" ? "series" : "movie";
   let stuckTimer = 0;
 
   /* A third-party player can be blank and say nothing at all. Fifteen seconds
@@ -818,8 +831,15 @@ function wirePlayer() {
   }
 
   const saved = getProgress()[id];
+  /* a link somebody shared carries the second it was made at */
+  const fromLink = Math.max(
+    0,
+    Math.floor(Number(new URLSearchParams(location.search).get("t")) || 0)
+  );
   const resumeAt =
-    saved && saved.seconds && saved.seconds > MIN_SECONDS
+    fromLink > MIN_SECONDS
+      ? fromLink
+      : saved && saved.seconds && saved.seconds > MIN_SECONDS
       ? Math.floor(saved.seconds)
       : 0;
 
@@ -864,6 +884,7 @@ function wirePlayer() {
       const player = frame.closest(".player");
       if (player) player.classList.add("playing");
       watchStuck();
+      hideUpNext();
     }
   }
 
@@ -883,7 +904,9 @@ function wirePlayer() {
   if (resumeAt && note) {
     note.textContent =
       "Resumed at " + Math.floor(resumeAt / 60) + "m " +
-      Math.floor(resumeAt % 60) + "s.";
+      Math.floor(resumeAt % 60) + "s" +
+      (fromLink ? " from the link you opened." : ".");
+    if (panel) panel.hidden = false;
   }
 
   let lastTick = 0;
@@ -892,6 +915,204 @@ function wirePlayer() {
   /* how much of this visit has actually played, so a page that is merely open
    * never becomes a card; picking up an existing episode counts as playing */
   let played = saved && saved.seconds >= MIN_WATCH ? MIN_WATCH : 0;
+
+  function clockish(seconds) {
+    const total = Math.max(0, Math.floor(seconds));
+    const minutes = Math.floor(total / 60);
+    const rest = total % 60;
+    return minutes + ":" + (rest < 10 ? "0" : "") + rest;
+  }
+
+  function hereSecond() {
+    if (lastKnown && lastKnown.now > 0) return Math.floor(lastKnown.now);
+    return Math.floor(resumeAt || 0);
+  }
+
+  function updateShareLabel() {
+    if (!shareBtn) return;
+    const at = hereSecond();
+    shareBtn.textContent = at > MIN_SECONDS ? "Share at " + clockish(at) : "Copy link";
+  }
+
+  function parseClock(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return -1;
+    if (/^\d+$/.test(raw)) return Number(raw);
+    const found = raw.match(/^(\d{1,3}):([0-5]?\d)$/);
+    return found ? Number(found[1]) * 60 + Number(found[2]) : -1;
+  }
+
+  /* The einthusan frame keeps its language in its own address; reading it is
+     same-origin, and only ever used to build a share link. */
+  function frameLanguage() {
+    if (active !== "einthusan") return "";
+    try {
+      return new URLSearchParams(frame.contentWindow.location.search)
+        .get("lang") || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  /* The chosen source's URL without a start second, so a new one can go on. */
+  function playFrom(seconds) {
+    const chosen =
+      buttons.find((button) => button.dataset.source === active) || buttons[0];
+    if (!chosen) return;
+    if (!chosen.dataset.resume) {
+      if (note) note.textContent = "This source cannot start at a chosen second.";
+      return;
+    }
+    chosen.dataset.played =
+      withResume(chosen.dataset.src, chosen.dataset.resume, seconds);
+    lastKnown = null;
+    lastTick = seconds > 0 ? seconds : 0;
+    played = 0;
+    select(active, true);
+    if (note && seconds > 0) {
+      note.textContent = "Playing from " + clockish(seconds) + ".";
+    }
+  }
+
+  if (panel) {
+    const startOver = panel.querySelector('[data-action="start-over"]');
+    if (startOver) {
+      startOver.addEventListener("click", () => {
+        /* a tombstone as well as the delete, so an older copy on another
+           device cannot hand the position back */
+        dropFromContinue(id);
+        panel.hidden = true;
+        if (note) note.textContent = "";
+        playFrom(0);
+      });
+    }
+
+    const go = panel.querySelector('[data-action="jump"]');
+    if (go && jumpField) {
+      go.addEventListener("click", () => {
+        const seconds = parseClock(jumpField.value);
+        if (seconds < 0) {
+          jumpField.setCustomValidity("Try 42:10, or a number of seconds.");
+          jumpField.reportValidity();
+          return;
+        }
+        jumpField.setCustomValidity("");
+        playFrom(seconds);
+      });
+      jumpField.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          go.click();
+        }
+      });
+    }
+  }
+
+  if (shareBtn) {
+    shareBtn.addEventListener("click", () => {
+      const at = hereSecond();
+      const query = [];
+      if (at > MIN_SECONDS) query.push("t=" + at);
+      const lang = frameLanguage();
+      if (lang) query.push("lang=" + encodeURIComponent(lang));
+      const url = location.origin + location.pathname +
+        (query.length ? "?" + query.join("&") : "");
+      const copied = () => {
+        shareBtn.textContent = "Link copied";
+        window.setTimeout(updateShareLabel, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(copied, () => {
+          if (note) note.textContent = url;
+        });
+      } else if (note) {
+        note.textContent = url;
+      }
+    });
+    updateShareLabel();
+  }
+
+  /* ------------------------------------------------------------- up next */
+
+  let upNextRun = 0;
+
+  function hideUpNext() {
+    if (upNext) upNext.hidden = true;
+  }
+
+  function nextEpisode() {
+    const on = document.querySelector(".episode.on");
+    if (!on) return null;
+    const all = Array.from(
+      document.querySelectorAll(".episode[data-season][data-episode]")
+    );
+    const index = all.indexOf(on);
+    if (index < 0 || index + 1 >= all.length) return null;
+    const next = all[index + 1];
+    const name = next.querySelector(".ep-name");
+    return {
+      href: next.getAttribute("href") || "",
+      label: (name && name.textContent.trim()) || "Next episode"
+    };
+  }
+
+  function upNextEpisode(next) {
+    if (!next || !next.href) return null;
+    const link = document.createElement("a");
+    link.className = "up-next-episode";
+    link.href = next.href;
+    link.textContent = "Next: " + next.label;
+    return link;
+  }
+
+  /* Two players can report the end of the same viewing, so only the newest
+     call owns the row: a finished fetch that lost the race is dropped. */
+  function showUpNext() {
+    if (!upNext) return;
+    const run = ++upNextRun;
+    const next = nextEpisode();
+    if (upNextNote) {
+      upNextNote.textContent = next
+        ? "That was the end of this episode. The next one is ready."
+        : "That was the end. Something else from the same shelf:";
+    }
+    if (upNextRow) {
+      upNextRow.innerHTML = "";
+      const episode = upNextEpisode(next);
+      if (episode) upNextRow.appendChild(episode);
+    }
+    upNext.hidden = false;
+    if (!mediaId) return;
+    fetch("/api/up-next/" + mediaKind + "/" + encodeURIComponent(mediaId))
+      .then((response) => response.json())
+      .then((data) => {
+        const items = (data && data.items) || [];
+        if (run !== upNextRun || !upNextRow) return;
+        upNextRow.innerHTML = "";
+        const episode = upNextEpisode(next);
+        if (episode) upNextRow.appendChild(episode);
+        if (!items.length) return;
+        items.slice(0, 12).forEach((one) => {
+          if (!one || !one.id) return;
+          const card = document.createElement("a");
+          card.className = "up-next-card";
+          card.href = "/title/" + (one.type === "series" ? "series" : "movie") +
+            "/" + one.id;
+          if (one.poster) {
+            const img = document.createElement("img");
+            img.loading = "lazy";
+            img.src = one.poster;
+            img.alt = "";
+            card.appendChild(img);
+          }
+          const label = document.createElement("span");
+          label.textContent = one.name + (one.year ? " · " + one.year : "");
+          card.appendChild(label);
+          upNextRow.appendChild(card);
+        });
+      })
+      .catch(() => {});
+  }
 
   function logTime(now, duration) {
     lastKnown = { now: now, duration: duration };
@@ -903,6 +1124,7 @@ function wirePlayer() {
       markFinished(id, meta);
       paint();
       syncAccount();
+      showUpNext();
       return;
     }
     if (played < MIN_WATCH) return;
@@ -921,6 +1143,7 @@ function wirePlayer() {
       addWatchTime(id, delta, meta);
     }
     lastTick = now;
+    updateShareLabel();
     logTime(now, duration);
   }
 
@@ -941,6 +1164,7 @@ function wirePlayer() {
         markFinished(id, meta);
         paint();
         syncAccount();
+        showUpNext();
         return;
       case "play":
         lastTick = now;
@@ -986,6 +1210,7 @@ function wirePlayer() {
         markFinished(id, meta);
         paint();
         syncAccount();
+        showUpNext();
         return;
       case "seeked":
         lastTick = now;

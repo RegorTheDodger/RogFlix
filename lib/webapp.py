@@ -411,6 +411,50 @@ def create_app():
     # ---------------------------------------------------------------- status
     _status = {}
 
+    @app.route("/api/up-next/<kind>/<media_id>")
+    def up_next(kind, media_id):
+        """What to watch after this one, for the row under a finished film.
+
+        Nothing is stored: the title's first two genres are asked of the same
+        catalogue the home page uses, and the title itself is dropped, so the
+        answer is the shelf it belongs to rather than a recommendation engine.
+        """
+        kind = "series" if kind == "series" else "movie"
+        if not re.match(r"^tt\d{5,}$", media_id or ""):
+            return jsonify({"genre": "", "items": []}), 400
+
+        item = stremio.meta(kind, media_id)
+        if not item:
+            return jsonify({"genre": "", "items": []})
+
+        genres = [one for one in (item.get("genres") or []) if one][:2]
+        items = []
+        seen = {item.get("id")}
+        for genre in genres:
+            try:
+                found = stremio.catalog(kind, "top", {"genre": genre})
+            except Exception:
+                continue
+            for one in found:
+                if one.get("id") in seen or not one.get("name"):
+                    continue
+                seen.add(one.get("id"))
+                items.append({
+                    "id": one["id"],
+                    "type": kind,
+                    "name": one.get("name") or "",
+                    "year": str(one.get("year") or ""),
+                    "poster": one.get("poster") or "",
+                })
+                if len(items) >= 12:
+                    break
+            if len(items) >= 12:
+                break
+
+        response = jsonify({"genre": genres[0] if genres else "", "items": items})
+        response.headers["Cache-Control"] = "private, max-age=300"
+        return response
+
     @app.route("/api/status")
     def status():
         """Whether each third-party player answers at all.

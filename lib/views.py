@@ -53,6 +53,11 @@ ICON_SEARCH = ('<svg viewBox="0 0 24 24" width="18" height="18" fill="none"'
 ICON_PLAY = ('<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"'
              ' aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>')
 
+ICON_PAUSE = ('<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"'
+              ' aria-hidden="true"><rect x="7" y="5" width="3.4" height="14"'
+              ' rx="1.1"/><rect x="13.6" y="5" width="3.4" height="14"'
+              ' rx="1.1"/></svg>')
+
 ICON_PLUS = ('<svg viewBox="0 0 24 24" width="18" height="18" fill="none"'
              ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
              ' aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>')
@@ -372,11 +377,13 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None,
     list_id = "ext:series:%s" % item["id"] if kind == "series" else progress_id
 
     body = ['<article class="title" data-id="%s" data-title="%s"'
+            ' data-media="%s" data-kind="%s"'
             ' data-cover="%s" data-url="%s" data-href="%s" data-year="%s"'
             ' data-runtime="%d" data-lang="English"'
             ' data-list-id="%s" data-list-href="%s">'
-            % (esc(progress_id), esc(item.get("name")), esc(poster), esc(href),
-               esc(entry_href), esc(item.get("year") or ""),
+            % (esc(progress_id), esc(item.get("name")), esc(item["id"]), kind,
+               esc(poster), esc(href), esc(entry_href),
+               esc(item.get("year") or ""),
                _runtime_seconds(item.get("runtime")), esc(list_id), esc(href))]
 
     # ---------------------------------------------------------------- stage
@@ -442,7 +449,18 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None,
             '<div class="stage-under">'
             '<div class="sources" role="group" aria-label="Playback source">'
             '<span class="sources-label">Source</span>%s</div>%s'
-            '<p class="resume" data-role="resume"></p>'
+            '<div class="resume-panel" data-role="resume-panel" hidden>'
+            '<p class="resume-line" data-role="resume"></p>'
+            '<div class="resume-actions">'
+            '<button type="button" class="resume-btn" data-action="start-over">'
+            'Start over</button>'
+            '<span class="jump"><label for="jump-at">Jump to</label>'
+            '<input id="jump-at" data-role="jump" inputmode="numeric"'
+            ' autocomplete="off" placeholder="42:10" size="6">'
+            '<button type="button" class="resume-btn" data-action="jump">'
+            'Go</button></span></div></div>'
+            '<button type="button" class="share-btn" data-action="share"'
+            ' data-role="share">Share</button>'
             '<p class="play-hint" data-role="stuck" hidden>Nothing has loaded'
             ' yet — give it a moment, or pick another source above.</p>'
             '<p class="play-note">%s from <b data-role="source-name">%s</b>.'
@@ -457,6 +475,14 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None,
         body.append('<p class="play-note">No player for this title: Cinemeta '
                     'did not return an id any of the players key on.</p>')
     body.append('</div></section>')
+
+    # What to watch once this one ends: the next episode, or the shelf it came
+    # from. static/app.js fills this in when a player reports the end.
+    body.append('<section class="up-next" data-role="up-next" hidden>'
+                '<div class="up-next-head"><h2>Up next</h2>'
+                '<p data-role="up-next-note"></p></div>'
+                '<div class="up-next-row" data-role="up-next-row"></div>'
+                '</section>')
 
     # ---------------------------------------------------------------- sheet
     # Everything Cinemeta knows, underneath the frame: the poster, title, blurb
@@ -948,9 +974,11 @@ def billboard_carousel(picks):
     return ('<div class="bb-carousel" data-bb-carousel>%s'
             '<div class="bb-dots" data-bb-dots></div>'
             '<button class="bb-pause" type="button" data-bb-pause'
-            ' aria-pressed="false" aria-label="Pause the carousel">Pause</button>'
+            ' aria-pressed="false" aria-label="Pause the carousel">'
+            '<span data-bb-icon="pause">%s</span>'
+            '<span data-bb-icon="play" hidden>%s</span></button>'
             '<div class="bb-progress" data-bb-progress aria-hidden="true">'
-            '<i></i></div></div>' % slides)
+            '<i></i></div></div>' % (slides, ICON_PAUSE, ICON_PLAY))
 
 
 def billboard_with_fallback(picks):
