@@ -14,26 +14,35 @@ title into one URL per service, in the order the title page offers them:
                 https://vidsrc.sh/embed/tv/{id}/{season}/{episode}
     VidSrc.mov  https://vidsrc.mov/embed/movie/{id}
                 https://vidsrc.mov/embed/tv/{id}/{season}/{episode}
+    Einthusan   /einthusan/{imdb}      South Asian films only
 
 CineSrc and VidLink are keyed by TMDB id only; the VidSrc pair takes a TMDB id
 or an IMDb one, so a title Cinemeta knows without a `moviedb_id` still has a
 player.
+
+Einthusan signs an mp4 per viewing instead of publishing an embed URL, so that
+last entry points at a page here (lib/einthusan_source.py resolves the film and
+plays it). It is offered only for films whose country Cinemeta reports as South
+Asian: einthusan has no series and nothing from anywhere else, so the button is
+left out rather than opening on an empty frame.
 
 One title rarely exists on every service, and any of them can fall over
 mid-film, so the page shows the list and lets the viewer pick. The order here
 is the order they are offered, best first.
 
 Resume points belong to this site (localStorage, merged into the account).
-Three players accept one in the URL — CineSrc as `t`, VidLink and VidSrc.sh as
-`startAt` — and those open where the film was left; VidSrc.mov documents no
-such parameter, so it starts at the top. VidLink and VidSrc.sh also report
-playback back over postMessage (`PLAYER_EVENT`), which is what keeps continue
-watching, watch time and finished state moving while either is the source in
-use.
+Four players accept one in the URL — CineSrc and Einthusan as `t`, VidLink and
+VidSrc.sh as `startAt` — and those open where the film was left; VidSrc.mov
+documents no such parameter, so it starts at the top. VidLink, VidSrc.sh and
+Einthusan also report playback back over postMessage (`PLAYER_EVENT`), which is
+what keeps continue watching, watch time and finished state moving while any of
+them is the source in use.
 """
 
 import re
 import urllib.parse
+
+from . import einthusan_source
 
 # --saffron in style.css. VidLink wants the hex without the "#", CineSrc with
 # it. static/app.js replaces either with the accent picked on /settings.
@@ -109,8 +118,18 @@ def _vidsrc_mov(kind, tmdb, imdb, season, episode):
     return _vidsrc("https://vidsrc.mov", kind, tmdb, imdb, season, episode)
 
 
+def _einthusan(kind, tmdb, imdb, season, episode):
+    """No URL to build: the page resolves the film and signs the file."""
+    return einthusan_source.player_path(imdb) if imdb else ""
+
+
+def _south_asian_films(kind, country):
+    return einthusan_source.offers(kind, country)
+
+
 # Offered in this order. "resume" is the query parameter the player documents
-# for a start second, or "" when it has none; static/app.js appends it.
+# for a start second, or "" when it has none; static/app.js appends it. "gate"
+# is what a title has to be for the source to be offered at all.
 SOURCES = (
     {"key": "cinesrc", "name": "CineSrc", "origin": "https://cinesrc.st",
      "resume": "t", "build": _cinesrc},
@@ -120,19 +139,26 @@ SOURCES = (
      "resume": "startAt", "build": _vidsrc_sh},
     {"key": "vidsrc-mov", "name": "VidSrc.mov", "origin": "https://vidsrc.mov",
      "resume": "", "build": _vidsrc_mov},
+    # last because it is the one source that has to be found before it plays
+    {"key": "einthusan", "name": "Einthusan", "origin": "",
+     "resume": "t", "build": _einthusan, "gate": _south_asian_films},
 )
 
 
-def sources(kind, imdb_id, tmdb_id, season=0, episode=0):
+def sources(kind, imdb_id, tmdb_id, season=0, episode=0, country=""):
     """Every player that can open this title, best first.
 
     A title with no id any of them understands gets an empty list, and the
-    page says so rather than showing an empty frame.
+    page says so rather than showing an empty frame. `country` is Cinemeta's,
+    and only decides whether the South Asian-only source is offered.
     """
     tmdb = _tmdb_id(tmdb_id)
     imdb = _imdb_id(imdb_id)
     out = []
     for source in SOURCES:
+        gate = source.get("gate")
+        if gate and not gate(kind, country):
+            continue
         url = source["build"](kind, tmdb, imdb, season, episode)
         if not url:
             continue
