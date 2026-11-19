@@ -12,8 +12,7 @@
 RogFlix puts everything the big streaming services are carrying on one shelf.
 It reads the Streaming Catalogs addon — 35 services, films and series — paints a
 home page of service-by-service rows, and plays any title through one of five
-players — CineSrc, VidLink, VidSrc.sh, VidSrc.mov, and einthusan for South
-Asian films — picked under the frame. Search, My List, continue watching and an
+players — CineSrc, VidLink, VidSrc.sh, VidSrc.mov — picked under the frame. Search, My List, continue watching and an
 account that merges those shelves between devices are all included.
 
 The app is Flask with server-rendered HTML, a small vanilla-JavaScript layer for
