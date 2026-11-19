@@ -699,9 +699,10 @@ function wirePlayer() {
  * carries them to the other devices. The rest are silent, so watching through
  * one of them does not move continue watching.
  *
- * Two players take a start second in the URL — CineSrc as `t`, VidLink as
- * `startAt` — and the server tags each button with the parameter it wants, so
- * the frame opens where the film was left. The others start at the top. */
+ * Some players take a start second in the URL — CineSrc as `t`, VidLink and
+ * VidUP as `startAt` — and the server tags each button with the parameter it
+ * wants, so the frame opens where the film was left. The others start at the
+ * top. */
 const VIDLINK_ORIGIN = "https://vidlink.pro";
 /* the source picked last time, so the same one comes back next visit */
 const SOURCE_KEY = "iml:player-source";
@@ -728,6 +729,9 @@ function tintPlayer(url, key) {
   }
   if (key === "cinesrc") {
     return url.replace(/([?&]color=)[^&]*/i, "$1%23" + hex);
+  }
+  if (key === "vidup") {
+    return url.replace(/([?&]theme=)[^&]*/i, "$1" + hex);
   }
   return url;
 }

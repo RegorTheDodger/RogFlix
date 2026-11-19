@@ -11,10 +11,10 @@
 
 RogFlix puts everything the big streaming services are carrying on one shelf.
 It reads the Streaming Catalogs addon — 35 services, films and series — paints a
-home page of service-by-service rows, and plays any title through one of five
-players — CineSrc, VidLink, VidSrc.sh, VidSrc.mov or AutoEmbed — picked under
-the frame. Search, My List, continue watching and an account that merges those
-shelves between devices are all included.
+home page of service-by-service rows, and plays any title through one of six
+players — CineSrc, VidLink, VidSrc.sh, VidSrc.mov, AutoEmbed or VidUP — picked
+under the frame. Search, My List, continue watching and an account that merges
+those shelves between devices are all included.
 
 The app is Flask with server-rendered HTML, a small vanilla-JavaScript layer for
 the rails, the player bridge and the local-first list, and Postgres (or SQLite
@@ -49,9 +49,9 @@ locally) for accounts. No build step, no client-side framework.
 - **A real title page.** Poster, backdrop, synopsis, cast, crew, runtime, rating,
   awards, trailer and the full episode list — none of which the catalogue addon
   itself provides.
-- **Five players, one picker.** CineSrc, VidLink, VidSrc.sh, VidSrc.mov and
-  AutoEmbed under every title page, so a service missing the film is one click
-  from the next.
+- **Six players, one picker.** CineSrc, VidLink, VidSrc.sh, VidSrc.mov,
+  AutoEmbed and VidUP under every title page, so a service missing the film is
+  one click from the next.
 - **Playback that resumes.** Films and single episodes open in CineSrc or
   VidLink at the second you left them.
 - **My List and continue watching** that work signed out and keep working on a
@@ -74,10 +74,11 @@ its own page without a lookup; the poster, backdrop, cast, runtime, rating,
 trailer and episode list all arrive together.
 
 **Watching.** A title page carries a player and a picker under it: CineSrc,
-VidLink, VidSrc.sh, VidSrc.mov and AutoEmbed, in that order. CineSrc and VidLink
-key on the TMDB id — a film at `/movie/<tmdb>`, an episode at
-`/tv/<tmdb>/<season>/<episode>` — while the other three take a TMDB or an IMDb
-id, so a title Cinemeta knows without a `moviedb_id` still plays. The choice is
+VidLink, VidSrc.sh, VidSrc.mov, AutoEmbed and VidUP, in that order. CineSrc and
+VidLink key on the TMDB id — a film at `/movie/<tmdb>`, an episode at
+`/tv/<tmdb>/<season>/<episode>` — while the other four take a TMDB or an IMDb
+id, so a title Cinemeta knows without a `moviedb_id` still plays. VidSrc and
+AutoEmbed put `/embed/` in the path; VidUP does not. The choice is
 kept in the browser and comes back on the next visit. The frame is covered by
 the poster until you press play, and a series opens on its first real season,
 since season 0 is the specials list and has no episode to play. VidLink reports
@@ -151,7 +152,7 @@ rogflix/
 │   ├── views.py            all HTML rendering
 │   ├── stremio.py          Cinemeta client + search + metadata cache
 │   ├── catalog.py          Streaming Catalogs client (home rows)
-│   ├── players.py          the five players and their embed URLs
+│   ├── players.py          the six players and their embed URLs
 │   ├── accounts.py         users, sessions, signup modes
 │   ├── sync.py             merge rules for the personal state
 │   └── db.py               Postgres/SQLite connection + schema
@@ -219,9 +220,9 @@ rather than positional, so settings can hide or reorder them safely.
 
 **`lib/players.py`** — the players. Turns a title's TMDB and IMDb ids and an
 optional season/episode into one embed URL per service — CineSrc, VidLink,
-VidSrc.sh, VidSrc.mov, AutoEmbed — in the order the page offers them, adding the
-accent colour where a player accepts one, the next-episode button on a VidLink
-series, and the query parameter each one takes for a start second.
+VidSrc.sh, VidSrc.mov, AutoEmbed, VidUP — in the order the page offers them,
+adding the accent colour where a player accepts one, the next-episode button on
+a VidLink series, and the query parameter each one takes for a start second.
 
 **`lib/accounts.py`** — users and sessions. Password hashing (PBKDF2-HMAC-SHA256,
 per-user salt), session token creation and lookup (only the SHA-256 of the token
@@ -389,7 +390,7 @@ The tables are created on first use; there is no migration step.
 
 **Known issues**
 
-- All five players are third-party. When one is missing a title, or its own
+- All six players are third-party. When one is missing a title, or its own
   sources fail, switch source under the frame — this app cannot fix their
   bundles, and only VidLink reports progress back to it.
 - A title Cinemeta has no TMDB id for has no player, and the page says so
