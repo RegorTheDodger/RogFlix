@@ -36,16 +36,28 @@ class Gate(unittest.TestCase):
         self.assertFalse(einthusan_source.offers("series", "India"))
         self.assertFalse(einthusan_source.offers("movie", "Pakistan"))
 
-    def test_source_list_is_gated(self):
+    def test_source_is_off_for_now(self):
         indian = [one["key"] for one in
                   players.sources("movie", "tt8178634", "", country="India")]
-        self.assertEqual(indian[-1], "einthusan")
-        elsewhere = [one["key"] for one in
-                     players.sources("movie", "tt8178634", "", country="Pakistan")]
-        self.assertNotIn("einthusan", elsewhere)
-        show = [one["key"] for one in
-                players.sources("series", "tt0903747", "", 1, 1, "India")]
-        self.assertNotIn("einthusan", show)
+        self.assertNotIn("einthusan", indian)
+        # kept in the tree: the entry is still there, only not offered
+        self.assertIn("einthusan", [one["key"] for one in players.SOURCES])
+
+    def test_source_list_is_gated_when_offered(self):
+        players.OFFER_EINTHUSAN = True
+        try:
+            indian = [one["key"] for one in
+                      players.sources("movie", "tt8178634", "", country="India")]
+            self.assertEqual(indian[-1], "einthusan")
+            elsewhere = [one["key"] for one in
+                         players.sources("movie", "tt8178634", "",
+                                         country="Pakistan")]
+            self.assertNotIn("einthusan", elsewhere)
+            show = [one["key"] for one in
+                    players.sources("series", "tt0903747", "", 1, 1, "India")]
+            self.assertNotIn("einthusan", show)
+        finally:
+            players.OFFER_EINTHUSAN = False
 
 
 class Matching(unittest.TestCase):

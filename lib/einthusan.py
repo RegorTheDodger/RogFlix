@@ -32,7 +32,12 @@ COVER_BASE = "https://%s/etv/s3/moviecovers/" % CDN_HOST
 # github.com/asaddon/EinthusanTV swaps that for cdn1, which is also the host
 # that serves the bytes when the page's own host is left out. So the path and
 # its query are lifted from the page and only the host is ours.
-MEDIA_HOST = "https://cdn1.einthusan.io"
+#
+# The catch is that the films are spread over more than one cdn: RRR is served
+# by cdn1, Bigil by cdn3 only, and some titles answer on both. Asking the
+# wrong one gets the same 404 as a dead signature, so the host is probed once
+# per film and remembered with the link.
+MEDIA_HOSTS = ("https://cdn1.einthusan.io", "https://cdn3.einthusan.io")
 # A film never outlasts its link, so one page fetch covers a whole viewing and
 # a revisit inside the window costs nothing. Refreshed well before expiry.
 MEDIA_TTL = 2 * 60 * 60
@@ -607,7 +612,7 @@ _media_cache = {}
 
 
 def parse_stream(doc):
-    """{url, title, expires} out of a watch page, or None for a dead id.
+    """{path, title, expires} out of a watch page, or None for a dead id.
 
     A removed film is answered with a redirect to /contentnotfound/, which has
     no player element at all, so a missing attribute is the whole test for
@@ -626,10 +631,35 @@ def parse_stream(doc):
     expiry = _EXPIRY.search(parts.query)
     title = _PLAYER_TITLE.search(doc)
     return {
-        "url": MEDIA_HOST + parts.path + "?" + parts.query,
+        "path": parts.path + "?" + parts.query,
         "title": collapse(html.unescape(title.group(1))) if title else "",
         "expires": int(expiry.group(1)) if expiry else 0,
     }
+
+
+def serves(host, path):
+    """True when this cdn actually streams a signed path.
+
+    One byte is asked for, which is enough for the CDN to say 206 and name the
+    content type; a wrong host answers 404 with an html page.
+    """
+    parts = urllib.parse.urlsplit(host)
+    conn = http.client.HTTPSConnection(parts.hostname, timeout=10,
+                                       context=ssl.create_default_context())
+    try:
+        conn.request("GET", path, headers={
+            "User-Agent": UA,
+            "Range": "bytes=0-0",
+            "Referer": "https://einthusan.tv/",
+        })
+        resp = conn.getresponse()
+        resp.read(64)
+        return (resp.status in (200, 206) and
+                "video" in (resp.headers.get("Content-Type") or ""))
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 
 def stream(movie_id):
@@ -658,6 +688,16 @@ def stream(movie_id):
 
     if not got:
         return hit if hit and hit["expires"] > now + 60 else None
+
+    got["url"] = None
+    for host in MEDIA_HOSTS:
+        if serves(host, got["path"]):
+            got["url"] = host + got["path"]
+            break
+    if not got["url"]:
+        # Nothing answered: hand back the first host rather than a player with
+        # no source, so a blocked probe is not mistaken for a missing film.
+        got["url"] = MEDIA_HOSTS[0] + got["path"]
 
     got["fetched"] = now
     with _cache_lock:

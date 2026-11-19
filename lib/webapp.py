@@ -456,7 +456,7 @@ def create_app():
                     "ms": int((time.time() - started) * 1000)}
 
         with ThreadPoolExecutor(max_workers=4) as pool:
-            results = list(pool.map(probe, players.SOURCES))
+            results = list(pool.map(probe, players.offered_sources()))
         payload = {"at": int(now), "sources": results}
         _status["value"] = {"at": now, "payload": payload}
         return jsonify(payload)

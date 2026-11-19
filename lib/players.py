@@ -24,7 +24,9 @@ Einthusan signs an mp4 per viewing instead of publishing an embed URL, so that
 last entry points at a page here (lib/einthusan_source.py resolves the film and
 plays it). It is offered only for films whose country Cinemeta reports as
 Indian: einthusan has no series and nothing from anywhere else, so the button
-is left out rather than opening on an empty frame.
+is left out rather than opening on an empty frame. It is also off for now
+(OFFER_EINTHUSAN below): the code stays so the source can come back by changing
+one flag.
 
 One title rarely exists on every service, and any of them can fall over
 mid-film, so the page shows the list and lets the viewer pick. The order here
@@ -127,6 +129,11 @@ def _indian_films(kind, country):
     return einthusan_source.offers(kind, country)
 
 
+# Einthusan is switched off while its streams are unreliable: the client, the
+# source logic and the /einthusan route all stay in the tree, and turning this
+# back to True puts the fifth button back on every Indian film.
+OFFER_EINTHUSAN = False
+
 # Offered in this order. "resume" is the query parameter the player documents
 # for a start second, or "" when it has none; static/app.js appends it. "gate"
 # is what a title has to be for the source to be offered at all.
@@ -145,6 +152,14 @@ SOURCES = (
 )
 
 
+def offered_sources():
+    """The entries currently on offer, which is SOURCES minus the switched-off
+    ones. /api/status probes these, so a source that is not shown is not
+    reported either."""
+    return [source for source in SOURCES
+            if source["key"] != "einthusan" or OFFER_EINTHUSAN]
+
+
 def sources(kind, imdb_id, tmdb_id, season=0, episode=0, country=""):
     """Every player that can open this title, best first.
 
@@ -155,7 +170,7 @@ def sources(kind, imdb_id, tmdb_id, season=0, episode=0, country=""):
     tmdb = _tmdb_id(tmdb_id)
     imdb = _imdb_id(imdb_id)
     out = []
-    for source in SOURCES:
+    for source in offered_sources():
         gate = source.get("gate")
         if gate and not gate(kind, country):
             continue

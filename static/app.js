@@ -736,12 +736,13 @@ function wirePlayer() {
 
 /* A title page offers a player per source, because any one of them can be
  * missing a title or fall over mid-film. They are all just a URL in a frame,
- * so this file knows only which one is on and which of them talk back: VidLink,
- * VidSrc.sh and Einthusan post `PLAYER_EVENT` messages carrying a position and
- * a duration. Listening to those keeps our resume position, watch time and
- * "finished" state working, and the account sync carries them to the other
- * devices. CineSrc and VidSrc.mov are silent, so watching through either does
- * not move continue watching.
+ * so this file knows only which one is on and which of them talk back: VidLink
+ * and VidSrc.sh post `PLAYER_EVENT` messages, CineSrc posts its own
+ * `cinesrc:*` events, and Einthusan's frame is a page of ours. All of them
+ * carry a position and a duration. Listening to those keeps our resume
+ * position, watch time and "finished" state working, and the account sync
+ * carries them to the other devices. VidSrc.mov is silent, so watching through
+ * it does not move continue watching.
  *
  * Some players take a start second in the URL — CineSrc and Einthusan as `t`,
  * VidLink and VidSrc.sh as `startAt` — and the server tags each button with the
@@ -749,6 +750,7 @@ function wirePlayer() {
  * has none, so it starts at the top. */
 const VIDLINK_ORIGIN = "https://vidlink.pro";
 const VIDSRC_ORIGIN = "https://vidsrc.sh";
+const CINESRC_ORIGIN = "https://cinesrc.st";
 /* Einthusan has no embed of its own: that frame is a page here, same origin. */
 const SITE_ORIGIN = location.origin;
 /* the source picked last time, so the same one comes back next visit */
@@ -907,6 +909,18 @@ function wirePlayer() {
 
   let lastTick = 0;
   let lastSave = 0;
+  let lastSync = 0;
+
+  /* A signed-in viewer's resume point belongs on the server too, not only in
+   * this tab: a sync every twenty seconds of playback means closing the tab
+   * from the player still leaves the position on the account, which unloading
+   * the page mid-request would otherwise lose. */
+  function syncWhilePlaying() {
+    const stamp = Date.now();
+    if (stamp - lastSync < 20000) return;
+    lastSync = stamp;
+    syncAccount();
+  }
   let lastKnown = null;
   /* how much of this visit has actually played, so a page that is merely open
    * never becomes a card; picking up an existing episode counts as playing */
@@ -1012,6 +1026,7 @@ function wirePlayer() {
     if (stamp - lastSave < 4000) return;
     lastSave = stamp;
     setResume(id, now, duration, meta);
+    syncWhilePlaying();
   }
 
   /* One report. The position moving is the only reliable sign of playback: a
@@ -1061,6 +1076,62 @@ function wirePlayer() {
         tick(now, duration);
         return;
       case "timeupdate":
+        tick(now, duration);
+        return;
+      default:
+        return;
+    }
+  });
+
+  /* CineSrc names its own events (`cinesrc:timeupdate` and friends) and sends
+   * the position as a bare currentTime/duration pair rather than under `data`.
+   * Its ready and play events also end the blank-frame wait, so a film that
+   * does play never shows the "nothing has loaded" hint. */
+  window.addEventListener("message", function (event) {
+    if (active !== "cinesrc") return;
+    if (event.origin !== CINESRC_ORIGIN) return;
+    if (event.source !== frame.contentWindow) return;
+    const data = event.data;
+    if (!data || typeof data.type !== "string") return;
+    if (data.type.indexOf("cinesrc:") !== 0) return;
+
+    const now = Number(data.currentTime) || 0;
+    const duration = Number(data.duration) || 0;
+
+    switch (data.type) {
+      case "cinesrc:ended":
+        markFinished(id, meta);
+        paint();
+        syncAccount();
+        showUpNext();
+        return;
+      case "cinesrc:play":
+        clearStuck();
+        lastTick = now;
+        lastSave = 0;
+        logTime(now, duration);
+        return;
+      case "cinesrc:seeking":
+      case "cinesrc:seeked":
+        /* the jump is not watching: the next report starts from there */
+        lastTick = now;
+        lastKnown = { now: now, duration: duration };
+        logTime(now, duration);
+        return;
+      case "cinesrc:pause":
+        /* the pause event itself carries no position, so the last one the
+         * player reported is what gets written on the way out of playback */
+        clearStuck();
+        lastSave = 0;
+        if (lastKnown && lastKnown.duration > 0) {
+          logTime(lastKnown.now, lastKnown.duration);
+        }
+        return;
+      case "cinesrc:loadedmetadata":
+        if (duration > 0) lastKnown = { now: now, duration: duration };
+        return;
+      case "cinesrc:timeupdate":
+        clearStuck();
         tick(now, duration);
         return;
       default:

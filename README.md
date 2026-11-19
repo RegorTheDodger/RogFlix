@@ -11,9 +11,11 @@
 
 RogFlix puts everything the big streaming services are carrying on one shelf.
 It reads the Streaming Catalogs addon — 35 services, films and series — paints a
-home page of service-by-service rows, and plays any title through one of five
-players — CineSrc, VidLink, VidSrc.sh, VidSrc.mov — picked under the frame. Search, My List, continue watching and an
-account that merges those shelves between devices are all included.
+home page of service-by-service rows, and plays any title through one of four
+players — CineSrc, VidLink, VidSrc.sh and VidSrc.mov — picked under the frame. A
+fifth, einthusan, is kept in the code but switched off for now (see
+[Einthusan](#einthusan)). Search, My List, continue watching and an account that
+merges those shelves between devices are all included.
 
 The app is Flask with server-rendered HTML, a small vanilla-JavaScript layer for
 the rails, the player bridge and the local-first list, and Postgres (or SQLite
@@ -48,12 +50,11 @@ locally) for accounts. No build step, no client-side framework.
 - **A real title page.** Poster, backdrop, synopsis, cast, crew, runtime, rating,
   awards, trailer and the full episode list — none of which the catalogue addon
   itself provides.
-- **Five sources, one picker.** CineSrc, VidLink, VidSrc.sh and VidSrc.mov
+- **Four sources, one picker.** CineSrc, VidLink, VidSrc.sh and VidSrc.mov
   under every title page, so a service missing the film is
-  one click from the next. Films Cinemeta lists as Indian get einthusan as a
-  fifth source, and only those films do.
+  one click from the next.
 - **Playback that resumes.** Films and single episodes open in CineSrc,
-  VidLink, VidSrc.sh or einthusan at the second you left them.
+  VidLink or VidSrc.sh at the second you left them.
 - **My List and continue watching** that work signed out and keep working on a
   phone and a laptop once you sign in.
 
@@ -81,13 +82,18 @@ id, so a title Cinemeta knows without a `moviedb_id` still plays. Both VidSrc
 mirrors put `/embed/` in the path. The choice is
 kept in the browser and comes back on the next visit. The frame is covered by
 the poster until you press play, and a series opens on its first real season,
-since season 0 is the specials list and has no episode to play. VidLink and
-VidSrc.sh report
-position as it goes, so the resume point and the watch time keep moving
-while either is the source in use, and a series on VidLink shows the player's own
-next-episode button near the end of an episode.
+since season 0 is the specials list and has no episode to play. CineSrc
+(`cinesrc:timeupdate`), VidLink and VidSrc.sh (`PLAYER_EVENT`) report position
+as it goes, so the resume point and the watch time keep moving while any of them
+is the source in use, and a series on VidLink shows the player's own
+next-episode button near the end of an episode. VidSrc.mov reports nothing, so a
+film watched through it does not move continue watching.
 
-**Einthusan.** Indian films get a fifth source: einthusan, which has no embed
+**Einthusan.** Switched off for now: `OFFER_EINTHUSAN` in `lib/players.py` is
+`False`, so no title page offers the button, and the client, the source logic
+and the `/einthusan` routes stay in the tree so it can come back by flipping
+that one flag. While it was on, Indian films got a fifth source: einthusan,
+which has no embed
 URL of its own and signs an mp4 per viewing instead — it indexes eight Indian
 languages and carries nothing from outside India. So that button points
 at a page here: it searches einthusan's eight language indexes for the film by
@@ -247,7 +253,8 @@ optional season/episode into one URL per service — CineSrc, VidLink, VidSrc.sh
 VidSrc.mov, einthusan — in the order the page offers them,
 adding the accent colour where a player accepts one, the next-episode button on
 a VidLink series, and the query parameter each one takes for a start second.
-Einthusan is gated: it is offered only for films Cinemeta lists as Indian.
+Einthusan is gated twice: it is offered only for films Cinemeta lists as Indian,
+and only while `OFFER_EINTHUSAN` is on.
 
 **`lib/einthusan.py`** — the einthusan client, taken from the EinthuFlix app.
 It reads the eight language indexes, searches them (with a shorter-prefix
@@ -402,7 +409,7 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 
 - Press the + on any poster to add it to My List.
 - Press Play on a title page to reveal the player; it opens at your saved second
-  in CineSrc, VidLink, VidSrc.sh or einthusan. If a source will not load, pick
+  in CineSrc, VidLink or VidSrc.sh. If a source will not load, pick
   another under the frame, and the page says so if nothing loads at all.
 - The hero carousel has a pause button (an icon, not a word), and it starts
   paused when the system asks for reduced motion.
@@ -450,9 +457,9 @@ The tables are created on first use; there is no migration step.
 
 **Known issues**
 
-- All five sources are third-party. When one is missing a title, or its own
+- Every source is third-party. When one is missing a title, or its own
   sources fail, switch source under the frame — this app cannot fix their
-  bundles, and only VidLink, VidSrc.sh and einthusan report progress back to it.
+  bundles, and only CineSrc, VidLink and VidSrc.sh report progress back to it.
 - Einthusan has one entry per language. A film it carries in several starts on
   the original when Wikipedia names it, and the other indexes are buttons across
   the frame; a dub with no button is one einthusan does not carry. Its signed
