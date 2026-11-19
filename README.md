@@ -465,11 +465,6 @@ The tables are created on first use; there is no migration step.
 - Rows and metadata depend on two public addons: if either is down, a row or a
   page can come back empty.
 
-**Roadmap**
-
-- Row layout synced with the account.
-- Inline trailer playback instead of a YouTube tab.
-- Keyboard shortcuts for the player and the rails.
 
 ## Contributing
 
