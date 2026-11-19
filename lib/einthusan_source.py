@@ -111,14 +111,14 @@ def _first_word(name):
     return head if head and head != (name or "").strip() else ""
 
 
-def find(name, year):
-    """The einthusan record for a film, or None. Cached, misses included.
+def _matches(name, year):
+    """{language: the einthusan record for this film in that index}, cached.
 
-    Every language index is searched at once: Cinemeta says a film is Indian
-    but not which of the eight it is in, and a dub lives in its own index. The
-    languages are also the tie-break — a film listed in both Tamil and Hindi
-    keeps the Tamil one, because that is the original and einthusan lists it
-    first.
+    Every index is asked because Cinemeta says a film is Indian but not which
+    of the eight languages it is in, and a dub lives in its own index. Keeping
+    each language's best entry — not just the closest overall — is what lets
+    the frame offer the others: a Telugu film that matched in Tamil first is
+    still playable in Telugu when its index has it.
     """
     if not (name or "").strip():
         return None
@@ -131,37 +131,37 @@ def find(name, year):
             return hit[1]
 
     year_num = _year(year)
-    best, best_score, seen, answered = None, 0.0, set(), 0
+    best, answered = {}, 0
 
     def scan(term):
-        nonlocal best, best_score, answered
+        nonlocal answered
         for lang in einthusan.LANG_CODES:
             items = _page(term, lang)
             if items is None:
                 continue
             answered += 1
             for item in items:
-                if item["id"] in seen:
-                    continue
-                seen.add(item["id"])
                 score = _score(name, year_num, item)
-                # strict on purpose: the first language to reach a score owns
-                # the tie
-                if score > best_score:
-                    best, best_score = item, score
+                if score < GOOD_MATCH:
+                    continue
+                if lang not in best or score > best[lang][0]:
+                    best[lang] = (score, item)
 
     scan(name.strip())
-    # nothing close: ask once more under the title's first word, which is how
-    # a catalogue title with a subtitle or a dash still finds its index entry
-    if not (best and best_score >= GOOD_MATCH):
+    # nothing close anywhere: ask once more under the title's first word, which
+    # is how a catalogue title with a subtitle or a dash still finds its index
+    # entry
+    if not best:
         head = _first_word(name)
         if head:
             scan(head)
 
-    if best and best_score >= GOOD_MATCH:
+    matches = {lang: best[lang][1] for lang in einthusan.LANG_CODES
+               if lang in best}
+    if matches:
         with _lock:
-            _found[key] = (now + HIT_TTL, best)
-        return best
+            _found[key] = (now + HIT_TTL, matches)
+        return matches
 
     # A title that really is not there is worth a short memory; a request that
     # never got through is asked again on the next visit, because the source
@@ -170,6 +170,28 @@ def find(name, year):
         with _lock:
             _found[key] = (now + MISS_TTL, None)
     return None
+
+
+def find(name, year, prefer=""):
+    """What einthusan has for a film, and which index to start on.
+
+    Returns {"by_lang": {code: record}, "pick": code}, in einthusan's own
+    language order, or None when no index has the film. `pick` is `prefer`
+    when that index holds the film, otherwise whichever language matched the
+    title most closely, ties going to the earlier language.
+    """
+    matches = _matches(name, year)
+    if not matches:
+        return None
+
+    prefer = (prefer or "").strip().lower()
+    if prefer in matches:
+        pick = prefer
+    else:
+        year_num = _year(year)
+        pick = max(matches,
+                   key=lambda code: _score(name, year_num, matches[code]))
+    return {"by_lang": matches, "pick": pick}
 
 
 def stream(film_id):
