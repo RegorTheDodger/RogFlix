@@ -2084,3 +2084,45 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
     }
   }
 }
+
+/* The hero moves on its own, so it carries a way to stop: bottom right, above
+ * the countdown bar, quiet until it is wanted. */
+.bb-carousel {
+  position: relative;
+}
+
+.bb-pause {
+  position: absolute;
+  right: 18px;
+  bottom: 20px;
+  z-index: 3;
+  padding: 6px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #f3ece4;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.bb-pause:hover,
+.bb-pause:focus-visible {
+  border-color: var(--saffron);
+  color: var(--saffron);
+}
+
+/* A player that never reports anything is a black rectangle; this is the line
+ * that says so under the frame. */
+.play-hint {
+  margin: 10px 0 0;
+  color: var(--saffron);
+  font-size: 13px;
+}
+
+.play-hint[hidden] {
+  display: none;
+}

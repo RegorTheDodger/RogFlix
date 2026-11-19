@@ -100,7 +100,10 @@ the same second, and the language playing is marked as the original or a dub.
 The default is always the film's original language. Cinemeta records a film's
 country but not its language, so the language field of the film's Wikipedia
 infobox is read once per film and kept for a week; when an article says
-nothing, the closest title match plays.
+nothing, the closest title match plays. The scan is done once per film rather
+than once per visitor: the answer is kept in the database for three days, a
+title page starts it early, and simultaneous requests for the same film share
+one scan.
 Films from anywhere else never see the source, and neither does a series. A
 film einthusan does not have says so in the frame rather than sitting blank.
 
@@ -174,6 +177,8 @@ rogflix/
 │   ├── einthusan.py        einthusan client: search, indexes, signed media
 │   ├── einthusan_source.py finds an Indian film for the fifth source
 │   ├── language.py        a film's original language, from Wikipedia
+│   ├── film_cache.py      what einthusan found, kept in the database
+│   ├── limits.py          per-address budgets for the einthusan routes
 │   ├── accounts.py         users, sessions, signup modes
 │   ├── sync.py             merge rules for the personal state
 │   └── db.py               Postgres/SQLite connection + schema
@@ -189,6 +194,8 @@ rogflix/
 │   ├── logo-180.png        apple-touch-icon
 │   ├── favicon-32.png      browser tab icon
 │   └── og.png             1200×630 social card
+├── tests/
+│   └── test_logic.py       gate, matching, language and the merge rules
 ├── requirements.txt        Flask and pg8000, pinned
 ├── vercel.json             Vercel function settings
 ├── .vercelignore           files Vercel must not upload
@@ -266,6 +273,17 @@ year has to be on the page too, so a same-named film cannot lend its language.
 That is asked once per film, kept for a week, and needs no key. A miss costs
 nothing: the frame then starts on whichever index matched the title best, and
 the language buttons are there either way.
+
+**`lib/film_cache.py`** — the fifth source's memory. A scan costs a page per
+language, so what it found is written to the database against the IMDb id:
+the record per language, the best match, and the language the film was made
+in. It also makes one scan serve everybody: simultaneous requests for the same
+film wait for the first, and a title page starts the work in the background so
+the frame opens on an answer.
+
+**`lib/limits.py`** — the brakes. A per-address budget per minute, and a small
+number of scans in flight at once, so one visitor cannot make einthusan answer
+everybody else with thin pages.
 
 **`lib/accounts.py`** — users and sessions. Password hashing (PBKDF2-HMAC-SHA256,
 per-user salt), session token creation and lookup (only the SHA-256 of the token
@@ -389,6 +407,8 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 /title/movie/tt15239678            a film's page and player
 /title/series/tt7587890?s=1&e=2    one episode
 /einthusan/tt1745960?t=300         the fifth source's frame, at 5:00
+/einthusan/tt1745960?lang=tamil    the same, in Tamil
+/api/status                        whether each player answers, cached 5 min
 /watchlist                         My List
 /settings                          account, home rows, stored data
 /healthz                           JSON: database dialect and app state
@@ -397,7 +417,12 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
 - Press the + on any poster to add it to My List.
 - Press Play on a title page to reveal the player; it opens at your saved second
   in CineSrc, VidLink, VidSrc.sh or einthusan. If a source will not load, pick
-  another under the frame.
+  another under the frame, and the page says so if nothing loads at all.
+- The hero carousel has a Pause button, and it starts paused when the system
+  asks for reduced motion.
+- In the einthusan frame, the language buttons switch the copy at the same
+  second; the choice is remembered for that film, and the address keeps it, so a
+  reload or a shared link plays the same language.
 - Watch ten seconds and the title appears under Continue watching.
 - In `/settings`, under **Home page rows**, untick a row or move it with the
   arrows; the home page follows on the next load.
@@ -441,7 +466,8 @@ The tables are created on first use; there is no migration step.
 - Einthusan has one entry per language. A film it carries in several starts on
   the original when Wikipedia names it, and the other indexes are buttons across
   the frame; a dub with no button is one einthusan does not carry. Its signed
-  links expire after six hours, and a viewing that outlasts one needs a reload.
+  links expire after six hours, which the frame recovers from on its own by
+  asking for a new link and resuming at the same second.
 - A title Cinemeta has no TMDB id for has no player, and the page says so
   instead of showing an empty frame.
 - Season 0 (specials) is listed but not playable.

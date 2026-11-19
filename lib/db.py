@@ -43,6 +43,15 @@ SCHEMA = (
         n     INTEGER NOT NULL,
         until BIGINT NOT NULL
     )""",
+    # What the fifth source found for a film: the index it is in per language,
+    # the one it matched best, and the language the film was made in. Kept here
+    # rather than in process memory because a serverless instance does not
+    # outlive the request that filled it.
+    """CREATE TABLE IF NOT EXISTS iml_einthusan (
+        imdb TEXT PRIMARY KEY,
+        at   BIGINT NOT NULL,
+        data TEXT NOT NULL
+    )""",
 )
 
 _store = None

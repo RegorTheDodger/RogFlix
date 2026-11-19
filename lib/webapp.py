@@ -13,15 +13,20 @@ Routes
 
 import os
 import re
+import time
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from flask import Flask, Response, jsonify, redirect, request
 
 from . import accounts
 from . import einthusan_source
-from . import language
+from . import film_cache
+from . import limits
+from . import players
 from . import stremio
 from . import views
 
@@ -61,6 +66,28 @@ def create_app():
         if not user:
             return None, (jsonify({"error": "Login required."}), 401)
         return user, None
+
+    def secure_cookie():
+        """True on the HTTPS deployment, false on localhost.
+
+        Vercel terminates TLS and forwards the original scheme, so the request
+        itself arrives as plain HTTP even when the visitor is on https.
+        """
+        if request.is_secure:
+            return True
+        return request.headers.get("X-Forwarded-Proto", "").lower() == "https"
+
+    def same_origin():
+        """Whether a state-changing request came from a page on this site.
+
+        SameSite=Lax already stops a cross-site form post from carrying the
+        session; this is the second lock, and it also covers a browser that
+        treats Lax differently from the spec.
+        """
+        origin = request.headers.get("Origin")
+        if not origin:
+            return True
+        return urlsplit(origin).netloc == request.host
 
     # ---------------------------------------------------------------- home
     @app.route("/")
@@ -133,11 +160,13 @@ def create_app():
         response = auth_response({"authenticated": True, "user": user}, 201)
         if request.is_json:
             response[0].set_cookie(SESSION_COOKIE, token, max_age=accounts.SESSION_DAYS * 86400,
-                                   httponly=True, samesite="Lax")
+                                   httponly=True, samesite="Lax",
+                                   secure=secure_cookie())
         else:
             response = redirect("/settings", code=303)
             response.set_cookie(SESSION_COOKIE, token, max_age=accounts.SESSION_DAYS * 86400,
-                                httponly=True, samesite="Lax")
+                                httponly=True, samesite="Lax",
+                                secure=secure_cookie())
         return response
 
     @app.route("/auth/login", methods=["POST"])
@@ -155,15 +184,19 @@ def create_app():
         response = auth_response({"authenticated": True, "user": user})
         if request.is_json:
             response[0].set_cookie(SESSION_COOKIE, token, max_age=accounts.SESSION_DAYS * 86400,
-                                   httponly=True, samesite="Lax")
+                                   httponly=True, samesite="Lax",
+                                   secure=secure_cookie())
         else:
             response = redirect("/settings", code=303)
             response.set_cookie(SESSION_COOKIE, token, max_age=accounts.SESSION_DAYS * 86400,
-                                httponly=True, samesite="Lax")
+                                httponly=True, samesite="Lax",
+                                secure=secure_cookie())
         return response
 
     @app.route("/auth/logout", methods=["POST"])
     def auth_logout():
+        if not same_origin():
+            return jsonify({"error": "Cross-site request refused."}), 403
         token = request.cookies.get(SESSION_COOKIE)
         accounts.delete_session(token)
         response = auth_response({"authenticated": False})
@@ -178,6 +211,8 @@ def create_app():
         if request.method == "GET":
             state, rev, updated = accounts.load_state(user["username"])
             return jsonify({"state": state, "rev": rev, "updated": updated})
+        if not same_origin():
+            return jsonify({"error": "Cross-site request refused."}), 403
         incoming = request.get_json(silent=True)
         if not isinstance(incoming, dict):
             return jsonify({"error": "A JSON state object is required."}), 400
@@ -194,6 +229,8 @@ def create_app():
         user, error = require_user()
         if error:
             return error
+        if not same_origin():
+            return jsonify({"error": "Cross-site request refused."}), 403
         state, rev, updated = accounts.clear_state(user["username"])
         return jsonify({"state": state, "rev": rev, "updated": updated})
 
@@ -246,8 +283,16 @@ def create_app():
                 if not any(one["episode"] == episode for one in current):
                     episode = current[0]["episode"]
 
+        # What einthusan already knows about this film, and a scan started now
+        # so the fifth source's frame opens on an answer instead of on eight
+        # index pages being read one after another.
+        known = None
+        if kind == "movie" and einthusan_source.offers(kind, item.get("country")):
+            film_cache.prewarm(media_id, item.get("name") or "", item.get("year"))
+            known = film_cache.peek(media_id)
+
         _n, body, _l = views.title_page(item, season, episode, seasons,
-                                        by_season)
+                                        by_season, einthusan=known)
         return render(item.get("name") or "Title", body)
 
     # ------------------------------------------------------------ einthusan
@@ -303,24 +348,46 @@ def create_app():
 
         heading = item.get("name") or ""
         year = item.get("year")
-        have = einthusan_source.find(heading, year)
-        original = ""
-        if have and len(have["by_lang"]) > 1:
-            # A film einthusan carries in several languages is a different dub
-            # in each, and the index that matched the title best is as likely
-            # to be one of them as the original. Wikipedia names the language
-            # the film was made in; when einthusan has that index, start there
-            # and let the frame's language buttons offer the rest.
-            original = language.original(heading, year)
-            if original:
-                have = einthusan_source.find(heading, year, prefer=original)
-        if not have:
+        record = film_cache.peek(media_id)
+        if not record:
+            # One scan reads a page per language, so it gets a budget per
+            # address and a place in a short queue: a burst from one visitor
+            # makes einthusan answer with thin pages that find nothing, for
+            # everybody.
+            address = (request.headers.get("X-Forwarded-For", "")
+                       .split(",")[0].strip() or request.remote_addr or "")
+            allowed, wait = limits.allow("einthusan:" + address, 30, 60)
+            if not allowed:
+                response = jsonify({"error": "Too many tries just now — "
+                                             "give it a minute."})
+                response.status_code = 429
+                response.headers["Retry-After"] = str(wait)
+                return response
+            try:
+                with limits.scan_slot():
+                    record = film_cache.warm(media_id, heading, year)
+            except (limits.Busy, film_cache.Busy):
+                return jsonify({"error": "Einthusan is busy right now — try "
+                                         "again in a moment."}), 503
+
+        matches = record.get("matches") or {}
+        original = record.get("original") or ""
+        if not matches:
             return jsonify({"error": "Einthusan has no playable copy of this "
                                      "film right now."})
 
+        # The requested language wins, then the one the film was made in, then
+        # the index whose title matched best.
         wanted = (request.args.get("lang") or "").strip().lower()
-        code = wanted if wanted in have["by_lang"] else have["pick"]
-        film = have["by_lang"][code]
+        if wanted in matches:
+            code = wanted
+        elif original in matches:
+            code = original
+        else:
+            code = record.get("pick") if record.get("pick") in matches \
+                else next(iter(matches))
+
+        film = matches[code]
         found = einthusan_source.stream(film["id"])
         if not found:
             return jsonify({"error": "Einthusan's copy of this film will not "
@@ -332,15 +399,53 @@ def create_app():
             "language_code": code,
             "original": original,
             "languages": [{"code": key,
-                           "name": have["by_lang"][key].get("lang")
-                                   or key.title(),
+                           "name": matches[key].get("lang") or key.title(),
                            "original": key == original}
-                          for key in have["by_lang"]],
+                          for key in matches],
             "title": found.get("title") or heading,
             "expires": found.get("expires") or 0,
         })
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    # ---------------------------------------------------------------- status
+    _status = {}
+
+    @app.route("/api/status")
+    def status():
+        """Whether each third-party player answers at all.
+
+        A player is somebody else's site: when one stops answering there is
+        nothing here to repair, but it is worth being able to see which one it
+        is. Cached for five minutes, and never used to decide what to play.
+        """
+        now = time.time()
+        hit = _status.get("value")
+        if hit and now - hit["at"] < 300:
+            return jsonify(hit["payload"])
+
+        def probe(source):
+            origin = source.get("origin") or ""
+            if not origin:
+                return {"key": source["key"], "ok": None, "ms": 0}
+            started = time.time()
+            try:
+                with urllib.request.urlopen(origin, timeout=4) as response:
+                    response.read(1)
+                ok = True
+            except urllib.error.HTTPError:
+                # an answer is an answer: the host is up
+                ok = True
+            except Exception:
+                ok = False
+            return {"key": source["key"], "ok": ok,
+                    "ms": int((time.time() - started) * 1000)}
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(probe, players.SOURCES))
+        payload = {"at": int(now), "sources": results}
+        _status["value"] = {"at": now, "payload": payload}
+        return jsonify(payload)
 
     # ---------------------------------------------------------------- misc
     @app.route("/healthz")

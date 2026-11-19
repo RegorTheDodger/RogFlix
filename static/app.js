@@ -502,6 +502,10 @@ function wireBillboard() {
 
   const dotsBox = carousel.querySelector("[data-bb-dots]");
   const bar = carousel.querySelector("[data-bb-progress] i");
+  const pauseBtn = carousel.querySelector("[data-bb-pause]");
+  /* someone who asked the system for less motion should not be handed a
+   * carousel that moves by itself: it starts stopped, and Play starts it */
+  let paused = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let at = 0;
   let timer = 0;
 
@@ -521,9 +525,18 @@ function wireBillboard() {
     if (!bar || kept.length < 2) return;
     bar.style.transition = "none";
     bar.style.width = "0%";
+    if (paused) return;
     void bar.offsetWidth;
     bar.style.transition = "width " + hold() + "ms linear";
     bar.style.width = "100%";
+  }
+
+  function syncPause() {
+    if (!pauseBtn) return;
+    pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
+    pauseBtn.setAttribute("aria-label",
+      paused ? "Play the carousel" : "Pause the carousel");
+    pauseBtn.textContent = paused ? "Play" : "Pause";
   }
 
   function show(next, byHand) {
@@ -544,9 +557,23 @@ function wireBillboard() {
 
   function start() {
     stop();
-    if (kept.length > 1) {
+    if (!paused && kept.length > 1) {
       timer = window.setInterval(() => show(at + 1), hold());
     }
+  }
+
+  if (pauseBtn) {
+    pauseBtn.addEventListener("click", () => {
+      paused = !paused;
+      syncPause();
+      if (paused) {
+        stop();
+        if (bar) bar.style.width = "0%";
+      } else {
+        start();
+        countdown();
+      }
+    });
   }
 
   const dots = kept.map((slide, n) => {
@@ -564,8 +591,10 @@ function wireBillboard() {
   });
 
   if (kept.length < 2 && dotsBox) dotsBox.hidden = true;
+  if (kept.length < 2 && pauseBtn) pauseBtn.hidden = true;
   load(kept[0]);
   show(0);
+  syncPause();
   start();
 }
 
@@ -768,6 +797,26 @@ function wirePlayer() {
   const openTab = document.querySelector("[data-embed-link]");
   const note = document.querySelector('[data-role="resume"]');
   const label = document.querySelector('[data-role="source-name"]');
+  const stuck = document.querySelector('[data-role="stuck"]');
+  let stuckTimer = 0;
+
+  /* A third-party player can be blank and say nothing at all. Fifteen seconds
+   * after a frame is asked for, with no PLAYER_EVENT from it, the page admits
+   * it and points at the picker instead of leaving a black rectangle. */
+  function clearStuck() {
+    window.clearTimeout(stuckTimer);
+    stuckTimer = 0;
+    if (stuck) stuck.hidden = true;
+  }
+
+  function watchStuck() {
+    clearStuck();
+    if (!stuck) return;
+    stuckTimer = window.setTimeout(() => {
+      if (stuck) stuck.hidden = false;
+    }, 15000);
+  }
+
   const saved = getProgress()[id];
   const resumeAt =
     saved && saved.seconds && saved.seconds > MIN_SECONDS
@@ -814,6 +863,7 @@ function wirePlayer() {
     if (reveal) {
       const player = frame.closest(".player");
       if (player) player.classList.add("playing");
+      watchStuck();
     }
   }
 
@@ -881,6 +931,7 @@ function wirePlayer() {
     if (event.source !== frame.contentWindow) return;
     const data = event.data;
     if (!data || data.type !== "PLAYER_EVENT" || !data.data) return;
+    clearStuck();
 
     const now = Number(data.data.currentTime) || 0;
     const duration = Number(data.data.duration) || 0;
@@ -925,6 +976,7 @@ function wirePlayer() {
     if (event.source !== frame.contentWindow) return;
     const data = event.data;
     if (!data || data.type !== "PLAYER_EVENT" || !data.data) return;
+    clearStuck();
 
     const now = Number(data.data.player_progress) || 0;
     const duration = Number(data.data.player_duration) || 0;

@@ -347,7 +347,8 @@ def _runtime_seconds(value):
     return total
 
 
-def title_page(item, season=1, episode=1, seasons=(), by_season=None):
+def title_page(item, season=1, episode=1, seasons=(), by_season=None,
+               einthusan=None):
     """One film or one episode: the player first, every known fact beneath it.
 
     Cinemeta is the only source here — backdrop, poster, year, runtime, rating,
@@ -417,6 +418,21 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
                esc(one["origin"]), esc(one["resume"]),
                "true" if index == 0 else "false", esc(one["name"]))
             for index, one in enumerate(found))
+        # What the fifth source already knows, when the title page found a
+        # cached answer: the languages it has, and the one the film was made
+        # in. Empty until the film has been looked up once.
+        langs_note = ""
+        if einthusan and einthusan.get("matches"):
+            matches = einthusan["matches"]
+            names = [one.get("lang") or code.title()
+                     for code, one in matches.items()]
+            made_in = ""
+            if einthusan.get("original") in matches:
+                made_in = matches[einthusan["original"]].get("lang") or ""
+            langs_note = (
+                '<p class="play-note langs-note">Einthusan has it in %s%s.</p>'
+                % (", ".join(esc(name) for name in names),
+                   (" &middot; made in " + esc(made_in)) if made_in else ""))
         body.append(
             '<div class="player-wrap"><div class="player embed">'
             '<iframe id="player" src="%s" data-player="%s" allowfullscreen'
@@ -425,15 +441,18 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
             '</iframe>%s</div></div>'
             '<div class="stage-under">'
             '<div class="sources" role="group" aria-label="Playback source">'
-            '<span class="sources-label">Source</span>%s</div>'
+            '<span class="sources-label">Source</span>%s</div>%s'
             '<p class="resume" data-role="resume"></p>'
+            '<p class="play-hint" data-role="stuck" hidden>Nothing has loaded'
+            ' yet — give it a moment, or pick another source above.</p>'
             '<p class="play-note">%s from <b data-role="source-name">%s</b>.'
             ' If the frame stays blank, pick another source — they carry'
             ' different copies of the same title. <a href="%s"'
             ' data-embed-link target="_blank" rel="noopener noreferrer">'
             'Open in a new tab</a> if this one will not play.</p></div>'
             % (esc(first["url"]), esc(first["key"]), esc(where), gate,
-               pickers, esc(where), esc(first["name"]), esc(first["url"])))
+               pickers, langs_note, esc(where), esc(first["name"]),
+               esc(first["url"])))
     else:
         body.append('<p class="play-note">No player for this title: Cinemeta '
                     'did not return an id any of the players key on.</p>')
@@ -628,10 +647,12 @@ def einthusan_player(title, media_id, start=0):
 
     A film einthusan carries in more than one language is a different dub per
     index, so every index holding it becomes a button across the top: pressing
-    one swaps the stream at the same second, which is the only way to watch a
-    Telugu film that was found in Tamil first. The badge names the language
-    playing and says when it is a dub; the API starts on the film's original
-    language whenever it can tell which index that is.
+    one swaps the stream at the same second, and the choice is remembered for
+    this film and written into the address, so a reload keeps it. The badge
+    names the language playing and says when it is a dub.
+
+    A signature lasts about six hours. Rather than leaving a long film to die
+    on one, the frame asks for a fresh link and resumes where it was.
     """
     start = max(0, int(start or 0))
     badge = "Einthusan"
@@ -649,7 +670,37 @@ var video = document.getElementById('film'),
     media = '__MEDIA__',
     language = '',
     resumeAt = start,
-    thenPlay = false;
+    thenPlay = false,
+    lastAt = start,
+    recovering = false,
+    recoveries = 0,
+    stalled = 0,
+    memory = 'rogflix:einthusan:' + media;
+
+/* The language this film was last watched in. The address wins, so a shared
+   link to a Tamil copy opens in Tamil; otherwise the last choice here does. */
+function remembered() {
+  try { return localStorage.getItem(memory) || ''; } catch (e) { return ''; }
+}
+
+function asked() {
+  try {
+    var found = new URLSearchParams(location.search).get('lang') || '';
+    return (found || remembered()).toLowerCase();
+  } catch (e) {
+    return remembered();
+  }
+}
+
+function remember(code) {
+  if (!code) return;
+  try { localStorage.setItem(memory, code); } catch (e) {}
+  try {
+    if (window.history && history.replaceState) {
+      history.replaceState(null, '', '?lang=' + encodeURIComponent(code));
+    }
+  } catch (e) {}
+}
 
 function report(status) {
   try {
@@ -689,6 +740,7 @@ function paintLanguages(list, active) {
     button.type = 'button';
     button.textContent = one.name;
     button.setAttribute('data-lang', one.code);
+    button.setAttribute('aria-pressed', one.code === active ? 'true' : 'false');
     if (one.code === active) button.className = 'on';
     if (one.original) button.title = 'Original language';
     langs.appendChild(button);
@@ -703,6 +755,7 @@ function load(code, at, play, first) {
     .then(function (response) { return response.json(); })
     .then(function (data) {
       langs.removeAttribute('aria-busy');
+      recovering = false;
       if (!data || !data.url) {
         if (video.hidden) {
           fail((data && data.error) || 'No playable copy of this film right now.');
@@ -714,6 +767,7 @@ function load(code, at, play, first) {
         return;
       }
       language = data.language_code || '';
+      remember(language);
       resumeAt = at;
       thenPlay = play;
       badge.className = 'badge';
@@ -727,6 +781,7 @@ function load(code, at, play, first) {
     })
     .catch(function () {
       langs.removeAttribute('aria-busy');
+      recovering = false;
       if (video.hidden) {
         fail('Einthusan could not be reached just now.');
       } else {
@@ -736,12 +791,26 @@ function load(code, at, play, first) {
     });
 }
 
+/* A signed link outlives its viewing by about six hours, so a long film can
+   lose its stream in the middle. Asking again is nearly free — the film was
+   found once and is remembered — so the frame does it before the viewer has
+   to reload anything. */
+function recover() {
+  if (recovering || recoveries >= 2 || !language) return;
+  recovering = true;
+  recoveries += 1;
+  badge.className = 'badge';
+  badge.textContent = 'Einthusan · re-connecting';
+  load(language, lastAt || video.currentTime || 0, true, false);
+}
+
 video.addEventListener('loadedmetadata', function () {
   var to = resumeAt;
   resumeAt = 0;
   if (to > 0 && (!video.duration || to < video.duration - 5)) {
     try { video.currentTime = to; } catch (e) {}
   }
+  lastAt = video.currentTime || to || 0;
   if (thenPlay) {
     thenPlay = false;
     var started = video.play();
@@ -754,6 +823,7 @@ video.addEventListener('play', function () {
 });
 var last = 0;
 video.addEventListener('timeupdate', function () {
+  if (video.currentTime) lastAt = video.currentTime;
   var now = Date.now();
   if (now - last < 5000) return;
   last = now;
@@ -763,6 +833,17 @@ video.addEventListener('seeked', function () { report('seeked'); });
 video.addEventListener('pause', function () { report('paused'); });
 video.addEventListener('ended', function () { report('completed'); });
 
+video.addEventListener('error', function () {
+  if (!video.getAttribute('src') || !video.error) return;
+  recover();
+});
+video.addEventListener('stalled', function () {
+  window.clearTimeout(stalled);
+  stalled = window.setTimeout(function () {
+    if (video.readyState < 3 && !video.paused) recover();
+  }, 20000);
+});
+
 langs.addEventListener('click', function (event) {
   var button = event.target.closest ? event.target.closest('button[data-lang]') : null;
   if (!button || button.getAttribute('data-lang') === language) return;
@@ -770,7 +851,7 @@ langs.addEventListener('click', function (event) {
   load(button.getAttribute('data-lang'), video.currentTime || 0, !video.paused, false);
 });
 
-load('', start, false, true);
+load(asked(), start, false, true);
 </script>"""
     script = (script.replace("__START__", str(start))
                     .replace("__MEDIA__", esc(media_id)))
@@ -862,8 +943,12 @@ def billboard_carousel(picks):
     """
     slides = "".join(billboard_slide(item, index, row_id)
                      for index, (row_id, item) in enumerate(picks))
+    # A carousel that moves by itself needs a way to stop it, which is both
+    # what WCAG asks for and what anyone reading a synopsis wants.
     return ('<div class="bb-carousel" data-bb-carousel>%s'
             '<div class="bb-dots" data-bb-dots></div>'
+            '<button class="bb-pause" type="button" data-bb-pause'
+            ' aria-pressed="false" aria-label="Pause the carousel">Pause</button>'
             '<div class="bb-progress" data-bb-progress aria-hidden="true">'
             '<i></i></div></div>' % slides)
 
