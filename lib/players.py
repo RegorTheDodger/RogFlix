@@ -14,25 +14,22 @@ title into one URL per service, in the order the title page offers them:
                 https://vidsrc.sh/embed/tv/{id}/{season}/{episode}
     VidSrc.mov  https://vidsrc.mov/embed/movie/{id}
                 https://vidsrc.mov/embed/tv/{id}/{season}/{episode}
-    AutoEmbed   https://player.autoembed.app/embed/movie/{id}
-                https://player.autoembed.app/embed/tv/{id}/{season}/{episode}
-    VidUP       https://vidup.to/movie/{id}
-                https://vidup.to/tv/{id}/{season}/{episode}
 
-CineSrc and VidLink are keyed by TMDB id only; the rest take a TMDB id or an
-IMDb one, so a title Cinemeta knows without a `moviedb_id` still has a player.
+CineSrc and VidLink are keyed by TMDB id only; the VidSrc pair takes a TMDB id
+or an IMDb one, so a title Cinemeta knows without a `moviedb_id` still has a
+player.
 
 One title rarely exists on every service, and any of them can fall over
 mid-film, so the page shows the list and lets the viewer pick. The order here
 is the order they are offered, best first.
 
 Resume points belong to this site (localStorage, merged into the account).
-Three players accept one in the URL — CineSrc as `t`, VidLink and VidUP as
-`startAt` — and those open where the film was left; the others start at the
-top. Only
-VidLink reports playback back over postMessage (`PLAYER_EVENT`, with
-`currentTime` and `duration`), which is what keeps continue watching, watch
-time and finished state moving while it is the source in use.
+Three players accept one in the URL — CineSrc as `t`, VidLink and VidSrc.sh as
+`startAt` — and those open where the film was left; VidSrc.mov documents no
+such parameter, so it starts at the top. VidLink and VidSrc.sh also report
+playback back over postMessage (`PLAYER_EVENT`), which is what keeps continue
+watching, watch time and finished state moving while either is the source in
+use.
 """
 
 import re
@@ -112,27 +109,6 @@ def _vidsrc_mov(kind, tmdb, imdb, season, episode):
     return _vidsrc("https://vidsrc.mov", kind, tmdb, imdb, season, episode)
 
 
-def _autoembed(kind, tmdb, imdb, season, episode):
-    return _vidsrc("https://player.autoembed.app", kind, tmdb, imdb, season,
-                   episode)
-
-
-def _vidup(kind, tmdb, imdb, season, episode):
-    """VidUP serves without the `/embed/` segment the VidSrc clones use."""
-    title = _either_id(tmdb, imdb)
-    if not title:
-        return ""
-    if kind == "series":
-        if not season or not episode:
-            return ""
-        path = "/tv/%s/%d/%d" % (title, int(season), int(episode))
-    else:
-        path = "/movie/%s" % title
-    # `theme` is its accent parameter, hex without the "#"
-    return "https://vidup.to%s?%s" % (
-        path, urllib.parse.urlencode([("theme", ACCENT)]))
-
-
 # Offered in this order. "resume" is the query parameter the player documents
 # for a start second, or "" when it has none; static/app.js appends it.
 SOURCES = (
@@ -141,14 +117,9 @@ SOURCES = (
     {"key": "vidlink", "name": "VidLink", "origin": "https://vidlink.pro",
      "resume": "startAt", "build": _vidlink},
     {"key": "vidsrc", "name": "VidSrc.sh", "origin": "https://vidsrc.sh",
-     "resume": "", "build": _vidsrc_sh},
+     "resume": "startAt", "build": _vidsrc_sh},
     {"key": "vidsrc-mov", "name": "VidSrc.mov", "origin": "https://vidsrc.mov",
      "resume": "", "build": _vidsrc_mov},
-    {"key": "autoembed", "name": "AutoEmbed",
-     "origin": "https://player.autoembed.app", "resume": "",
-     "build": _autoembed},
-    {"key": "vidup", "name": "VidUP", "origin": "https://vidup.to",
-     "resume": "startAt", "build": _vidup},
 )
 
 
