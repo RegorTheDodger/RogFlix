@@ -2,7 +2,7 @@
 The Streaming Catalogs addon: thirty-five services, films and shows.
 
 It answers catalogue requests only — no meta, no search — so a title's page is
-built from Cinemeta and its playback from CineSrc. Every entry already carries
+built from Cinemeta and its playback from VidLink. Every entry already carries
 the poster, year and IMDb id a card needs, which is why the home page paints
 without a hundred extra metadata calls.
 
