@@ -31,6 +31,16 @@ const FINISH_LEFT = 90;
 const MIN_WATCH = 10;
 /* under this many seconds it is not worth remembering */
 const MIN_SECONDS = 10;
+
+/* "2h 58m", so a long film does not read as "178m". */
+function durationLabel(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours) return hours + "h " + minutes + "m";
+  if (minutes) return minutes + "m";
+  return total + "s";
+}
 /* a jump longer than this is a seek, not watching */
 const SEEK_LIMIT = 6;
 /* a resume stamp this far ahead is a broken clock, not a fresh entry */
@@ -803,9 +813,6 @@ function wirePlayer() {
   const note = document.querySelector('[data-role="resume"]');
   const label = document.querySelector('[data-role="source-name"]');
   const stuck = document.querySelector('[data-role="stuck"]');
-  const panel = document.querySelector('[data-role="resume-panel"]');
-  const jumpField = document.querySelector('[data-role="jump"]');
-  const shareBtn = document.querySelector('[data-role="share"]');
   const upNext = document.querySelector('[data-role="up-next"]');
   const upNextRow = document.querySelector('[data-role="up-next-row"]');
   const upNextNote = document.querySelector('[data-role="up-next-note"]');
@@ -831,15 +838,8 @@ function wirePlayer() {
   }
 
   const saved = getProgress()[id];
-  /* a link somebody shared carries the second it was made at */
-  const fromLink = Math.max(
-    0,
-    Math.floor(Number(new URLSearchParams(location.search).get("t")) || 0)
-  );
   const resumeAt =
-    fromLink > MIN_SECONDS
-      ? fromLink
-      : saved && saved.seconds && saved.seconds > MIN_SECONDS
+    saved && saved.seconds && saved.seconds > MIN_SECONDS
       ? Math.floor(saved.seconds)
       : 0;
 
@@ -902,11 +902,7 @@ function wirePlayer() {
   select(savedSource(), false);
 
   if (resumeAt && note) {
-    note.textContent =
-      "Resumed at " + Math.floor(resumeAt / 60) + "m " +
-      Math.floor(resumeAt % 60) + "s" +
-      (fromLink ? " from the link you opened." : ".");
-    if (panel) panel.hidden = false;
+    note.textContent = "Resumed at " + durationLabel(resumeAt) + ".";
   }
 
   let lastTick = 0;
@@ -915,122 +911,6 @@ function wirePlayer() {
   /* how much of this visit has actually played, so a page that is merely open
    * never becomes a card; picking up an existing episode counts as playing */
   let played = saved && saved.seconds >= MIN_WATCH ? MIN_WATCH : 0;
-
-  function clockish(seconds) {
-    const total = Math.max(0, Math.floor(seconds));
-    const minutes = Math.floor(total / 60);
-    const rest = total % 60;
-    return minutes + ":" + (rest < 10 ? "0" : "") + rest;
-  }
-
-  function hereSecond() {
-    if (lastKnown && lastKnown.now > 0) return Math.floor(lastKnown.now);
-    return Math.floor(resumeAt || 0);
-  }
-
-  function updateShareLabel() {
-    if (!shareBtn) return;
-    const at = hereSecond();
-    shareBtn.textContent = at > MIN_SECONDS ? "Share at " + clockish(at) : "Copy link";
-  }
-
-  function parseClock(text) {
-    const raw = String(text || "").trim();
-    if (!raw) return -1;
-    if (/^\d+$/.test(raw)) return Number(raw);
-    const found = raw.match(/^(\d{1,3}):([0-5]?\d)$/);
-    return found ? Number(found[1]) * 60 + Number(found[2]) : -1;
-  }
-
-  /* The einthusan frame keeps its language in its own address; reading it is
-     same-origin, and only ever used to build a share link. */
-  function frameLanguage() {
-    if (active !== "einthusan") return "";
-    try {
-      return new URLSearchParams(frame.contentWindow.location.search)
-        .get("lang") || "";
-    } catch (e) {
-      return "";
-    }
-  }
-
-  /* The chosen source's URL without a start second, so a new one can go on. */
-  function playFrom(seconds) {
-    const chosen =
-      buttons.find((button) => button.dataset.source === active) || buttons[0];
-    if (!chosen) return;
-    if (!chosen.dataset.resume) {
-      if (note) note.textContent = "This source cannot start at a chosen second.";
-      return;
-    }
-    chosen.dataset.played =
-      withResume(chosen.dataset.src, chosen.dataset.resume, seconds);
-    lastKnown = null;
-    lastTick = seconds > 0 ? seconds : 0;
-    played = 0;
-    select(active, true);
-    if (note && seconds > 0) {
-      note.textContent = "Playing from " + clockish(seconds) + ".";
-    }
-  }
-
-  if (panel) {
-    const startOver = panel.querySelector('[data-action="start-over"]');
-    if (startOver) {
-      startOver.addEventListener("click", () => {
-        /* a tombstone as well as the delete, so an older copy on another
-           device cannot hand the position back */
-        dropFromContinue(id);
-        panel.hidden = true;
-        if (note) note.textContent = "";
-        playFrom(0);
-      });
-    }
-
-    const go = panel.querySelector('[data-action="jump"]');
-    if (go && jumpField) {
-      go.addEventListener("click", () => {
-        const seconds = parseClock(jumpField.value);
-        if (seconds < 0) {
-          jumpField.setCustomValidity("Try 42:10, or a number of seconds.");
-          jumpField.reportValidity();
-          return;
-        }
-        jumpField.setCustomValidity("");
-        playFrom(seconds);
-      });
-      jumpField.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          go.click();
-        }
-      });
-    }
-  }
-
-  if (shareBtn) {
-    shareBtn.addEventListener("click", () => {
-      const at = hereSecond();
-      const query = [];
-      if (at > MIN_SECONDS) query.push("t=" + at);
-      const lang = frameLanguage();
-      if (lang) query.push("lang=" + encodeURIComponent(lang));
-      const url = location.origin + location.pathname +
-        (query.length ? "?" + query.join("&") : "");
-      const copied = () => {
-        shareBtn.textContent = "Link copied";
-        window.setTimeout(updateShareLabel, 1800);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(copied, () => {
-          if (note) note.textContent = url;
-        });
-      } else if (note) {
-        note.textContent = url;
-      }
-    });
-    updateShareLabel();
-  }
 
   /* ------------------------------------------------------------- up next */
 
@@ -1143,7 +1023,6 @@ function wirePlayer() {
       addWatchTime(id, delta, meta);
     }
     lastTick = now;
-    updateShareLabel();
     logTime(now, duration);
   }
 

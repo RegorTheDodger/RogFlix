@@ -421,11 +421,8 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
   another under the frame, and the page says so if nothing loads at all.
 - The hero carousel has a pause button (an icon, not a word), and it starts
   paused when the system asks for reduced motion.
-- A title you were part-way through opens with a card that says where you were,
-  with Start over, a Jump to box (`42:10` or a number of seconds) and a Share
-  button. The link it copies carries that second and, inside the einthusan
-  frame, the language, so whoever opens it starts in the same place, in the same
-  language.
+- A title you were part-way through says where it will pick up: "Resumed at
+  2h 58m."
 - When a player reports the end, an Up next row appears under the frame: the
   next episode, and a dozen titles from the same genres.
 - In the einthusan frame, the language buttons switch the copy at the same

@@ -2138,68 +2138,6 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
 .bb-pause svg { display: block; width: 15px; height: 15px; }
 .bb-pause [data-bb-icon][hidden] { display: none; }
 
-/* Where you were, and the two things you might want to do about it. */
-.resume-panel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-  margin-top: 14px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, .09);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .025);
-}
-.resume-panel[hidden] { display: none; }
-.resume-line {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--saffron);
-}
-.resume-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-}
-.resume-btn,
-.share-btn {
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--paper-dim);
-  font: inherit;
-  font-size: 11.5px;
-  letter-spacing: .04em;
-  cursor: pointer;
-  transition: border-color .2s ease, color .2s ease;
-}
-.resume-btn:hover,
-.resume-btn:focus-visible,
-.share-btn:hover,
-.share-btn:focus-visible {
-  border-color: var(--saffron);
-  color: var(--saffron);
-}
-.share-btn { margin-top: 14px; }
-.jump { display: inline-flex; align-items: center; gap: 6px; }
-.jump label { font-size: 11.5px; color: var(--paper-faint); }
-.jump input {
-  width: 6.5em;
-  padding: 5px 8px;
-  border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, .35);
-  color: var(--paper);
-  font: inherit;
-  font-size: 12px;
-}
-.jump input:focus { outline: 2px solid var(--saffron); outline-offset: 1px; }
-
 /* Shown when a player reports the end: the next episode, or the same shelf. */
 .up-next {
   max-width: var(--read-max);
