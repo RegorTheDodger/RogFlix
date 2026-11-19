@@ -690,20 +690,21 @@ function wirePlayer() {
 
 /* ------------------------------------------------------------- player frame */
 
-/* A title page offers several players, because any one of them can be missing
+/* A title page offers four players, because any one of them can be missing
  * a title or fall over mid-film. They are all just a URL in a frame, so this
- * file knows only which one is on and that VidLink is the one that talks back:
- * it posts `PLAYER_EVENT` messages (play, pause, seeked, ended, timeupdate)
- * carrying currentTime and duration. Listening to those keeps our resume
- * position, watch time and "finished" state working, and the account sync
- * carries them to the other devices. The rest are silent, so watching through
- * one of them does not move continue watching.
+ * file knows only which one is on and which of them talk back: VidLink and
+ * VidSrc.sh both post `PLAYER_EVENT` messages carrying a position and a
+ * duration. Listening to those keeps our resume position, watch time and
+ * "finished" state working, and the account sync carries them to the other
+ * devices. The rest are silent, so watching through one of them does not move
+ * continue watching.
  *
  * Some players take a start second in the URL — CineSrc as `t`, VidLink and
- * VidUP as `startAt` — and the server tags each button with the parameter it
- * wants, so the frame opens where the film was left. The others start at the
- * top. */
+ * VidSrc.sh as `startAt` — and the server tags each button with the parameter
+ * it wants, so the frame opens where the film was left. VidSrc.mov has none,
+ * so it starts at the top. */
 const VIDLINK_ORIGIN = "https://vidlink.pro";
+const VIDSRC_ORIGIN = "https://vidsrc.sh";
 /* the source picked last time, so the same one comes back next visit */
 const SOURCE_KEY = "iml:player-source";
 
@@ -729,9 +730,6 @@ function tintPlayer(url, key) {
   }
   if (key === "cinesrc") {
     return url.replace(/([?&]color=)[^&]*/i, "$1%23" + hex);
-  }
-  if (key === "vidup") {
-    return url.replace(/([?&]theme=)[^&]*/i, "$1" + hex);
   }
   return url;
 }
@@ -907,6 +905,44 @@ function wirePlayer() {
         tick(now, duration);
         return;
       case "timeupdate":
+        tick(now, duration);
+        return;
+      default:
+        return;
+    }
+  });
+
+  /* VidSrc.sh sends the same `PLAYER_EVENT` type with different field names
+   * (`player_status`, `player_progress`, `player_duration`) and its own
+   * statuses, so its reports land on the same two functions above. It is a
+   * second origin, so the frame and the active source are checked again. */
+  window.addEventListener("message", function (event) {
+    if (active !== "vidsrc") return;
+    if (event.origin !== VIDSRC_ORIGIN) return;
+    if (event.source !== frame.contentWindow) return;
+    const data = event.data;
+    if (!data || data.type !== "PLAYER_EVENT" || !data.data) return;
+
+    const now = Number(data.data.player_progress) || 0;
+    const duration = Number(data.data.player_duration) || 0;
+
+    switch (data.data.player_status) {
+      case "completed":
+        markFinished(id, meta);
+        paint();
+        syncAccount();
+        return;
+      case "seeked":
+        lastTick = now;
+        lastKnown = { now: now, duration: duration };
+        logTime(now, duration);
+        return;
+      case "paused":
+        lastSave = 0;
+        tick(now, duration);
+        return;
+      case "playing":
+        /* fires on start, on resume and then roughly every five seconds */
         tick(now, duration);
         return;
       default:
