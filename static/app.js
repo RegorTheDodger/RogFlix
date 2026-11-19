@@ -690,22 +690,28 @@ function wirePlayer() {
 
 /* ------------------------------------------------------------- player frame */
 
-/* VidLink is another origin, but a talkative one: it posts `PLAYER_EVENT`
- * messages (play, pause, seeked, ended, timeupdate) carrying currentTime and
- * duration. Listening to them keeps our own resume position, watch time and
- * "finished" state working exactly as they do for the Einthusan <video>, and
- * the account sync carries them to the other devices.
+/* A title page offers several players, because any one of them can be missing
+ * a title or fall over mid-film. They are all just a URL in a frame, so this
+ * file knows only which one is on and that VidLink is the one that talks back:
+ * it posts `PLAYER_EVENT` messages (play, pause, seeked, ended, timeupdate)
+ * carrying currentTime and duration. Listening to those keeps our resume
+ * position, watch time and "finished" state working, and the account sync
+ * carries them to the other devices. The rest are silent, so watching through
+ * one of them does not move continue watching.
  *
- * On open the frame is handed our saved second with ?startAt=, which the
- * player documents as starting playback there. */
+ * Two players take a start second in the URL — CineSrc as `t`, VidLink as
+ * `startAt` — and the server tags each button with the parameter it wants, so
+ * the frame opens where the film was left. The others start at the top. */
 const VIDLINK_ORIGIN = "https://vidlink.pro";
+/* the source picked last time, so the same one comes back next visit */
+const SOURCE_KEY = "iml:player-source";
 
-/* The player takes its accent from ?primaryColor=, a hex code without the
- * "#". The server writes the default saffron into the URL, and the accent
- * picked on /settings replaces it here before the frame is allowed to load —
- * so a blue or green theme no longer plays with an orange scrubber. Nothing is
- * picked for the default theme, so that URL comes back unchanged and the frame
- * never reloads for a second time. */
+/* The players take their accent from a query parameter — VidLink as
+ * ?primaryColor= (hex without the "#"), CineSrc as ?color=. The server writes
+ * the default saffron into each URL, and the accent picked on /settings
+ * replaces it here before the frame is allowed to load, so a blue or green
+ * theme no longer plays with an orange scrubber. Nothing is picked for the
+ * default theme, so those URLs come back unchanged. */
 function playerAccent() {
   const hex = getComputedStyle(document.documentElement)
     .getPropertyValue("--saffron")
@@ -714,51 +720,116 @@ function playerAccent() {
   return /^[0-9a-f]{6}$/i.test(hex) ? hex : "";
 }
 
-function tintPlayer(url) {
+function tintPlayer(url, key) {
   const hex = playerAccent();
   if (!url || !hex) return url;
-  return url.replace(/([?&]primaryColor=)[^&]*/i, "$1" + hex);
+  if (key === "vidlink") {
+    return url.replace(/([?&]primaryColor=)[^&]*/i, "$1" + hex);
+  }
+  if (key === "cinesrc") {
+    return url.replace(/([?&]color=)[^&]*/i, "$1%23" + hex);
+  }
+  return url;
 }
 
-function wireVidLink() {
-  const frame = document.querySelector("iframe[data-vidlink]");
+/* Where a player documents one, the saved second goes on the end. */
+function withResume(url, param, at) {
+  if (!url || !param || !(at > 0)) return url;
+  return url + (url.indexOf("?") === -1 ? "?" : "&") + param + "=" + at;
+}
+
+function savedSource() {
+  try {
+    return localStorage.getItem(SOURCE_KEY) || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function storeSource(key) {
+  try {
+    localStorage.setItem(SOURCE_KEY, key);
+  } catch (e) {
+    /* private mode: the choice lasts this page only */
+  }
+}
+
+function wirePlayer() {
+  const frame = document.querySelector("iframe[data-player]");
   const article = frame && frame.closest("[data-id]");
   if (!frame || !article) return;
 
   const id = article.dataset.id;
+  const buttons = Array.from(document.querySelectorAll("[data-source]"));
+  const openTab = document.querySelector("[data-embed-link]");
+  const note = document.querySelector('[data-role="resume"]');
+  const label = document.querySelector('[data-role="source-name"]');
+  const saved = getProgress()[id];
+  const resumeAt =
+    saved && saved.seconds && saved.seconds > MIN_SECONDS
+      ? Math.floor(saved.seconds)
+      : 0;
 
-  /* one URL serves the frame, the bridge and the "new tab" link, and it
-   * carries the accent this visitor picked */
-  const base = tintPlayer(frame.dataset.vidlink);
-  if (base !== frame.dataset.vidlink) {
-    frame.dataset.vidlink = base;
-    const openTab = document.querySelector("[data-embed-link]");
-    if (openTab) openTab.href = base;
-  }
+  /* every button carries its own player's URL; this visitor's accent and the
+   * saved second are written into it before anything is loaded */
+  buttons.forEach((button) => {
+    const tuned = tintPlayer(button.dataset.src, button.dataset.source);
+    button.dataset.src = tuned;
+    button.dataset.played = withResume(tuned, button.dataset.resume, resumeAt);
+  });
 
   const meta = {
     id: id,
     title: article.dataset.title,
     cover: article.dataset.cover,
-    url: base,
+    url: "",
     href: article.dataset.href || location.pathname,
     year: article.dataset.year
   };
 
+  let active = "";
+
+  /* Putting a source on is one place: the frame, the highlighted button, the
+   * note underneath and the "new tab" link all follow it. */
+  function select(key, reveal) {
+    const chosen =
+      buttons.find((button) => button.dataset.source === key) || buttons[0];
+    if (!chosen) return;
+    active = chosen.dataset.source;
+    meta.url = chosen.dataset.played;
+    buttons.forEach((button) => {
+      const on = button === chosen;
+      button.classList.toggle("on", on);
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    if (frame.getAttribute("src") !== chosen.dataset.played) {
+      frame.src = chosen.dataset.played;
+    }
+    if (openTab) openTab.href = chosen.dataset.played;
+    if (label) label.textContent = chosen.textContent.trim();
+    if (reveal) {
+      const player = frame.closest(".player");
+      if (player) player.classList.add("playing");
+    }
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      select(button.dataset.source, true);
+      storeSource(button.dataset.source);
+    });
+  });
+
   paint();
 
-  const saved = getProgress()[id];
-  if (base && saved && saved.seconds && saved.seconds > MIN_SECONDS) {
-    const at = Math.floor(saved.seconds);
-    frame.src = base + (base.indexOf("?") === -1 ? "?" : "&") + "startAt=" + at;
-    const note = document.querySelector('[data-role="resume"]');
-    if (note) {
-      note.textContent =
-        "Resumed at " + Math.floor(at / 60) + "m " + Math.floor(at % 60) + "s.";
-    }
-  } else if (base && frame.getAttribute("src") !== base) {
-    /* no saved second, but the accent changed the URL */
-    frame.src = base;
+  /* the server already loaded the first player; this applies the saved second
+   * (or the source used last time) on top of it */
+  select(savedSource(), false);
+
+  if (resumeAt && note) {
+    note.textContent =
+      "Resumed at " + Math.floor(resumeAt / 60) + "m " +
+      Math.floor(resumeAt % 60) + "s.";
   }
 
   let lastTick = 0;
@@ -800,7 +871,8 @@ function wireVidLink() {
   }
 
   window.addEventListener("message", function (event) {
-    /* the frame we put on the page, and only its own tagged traffic */
+    /* only VidLink reports, and only when its frame is the one showing */
+    if (active !== "vidlink") return;
     if (event.origin !== VIDLINK_ORIGIN) return;
     if (event.source !== frame.contentWindow) return;
     const data = event.data;
@@ -1126,7 +1198,7 @@ document.querySelectorAll('.search-field input[name="q"]').forEach((input) => {
   if (btn) btn.hidden = !input.value;
 });
 
-/* The VidLink frame is covered by a poster until it is asked for, so a
+/* The player frame is covered by a poster until it is asked for, so a
  * half-painted player never lands on the page. */
 document.addEventListener("click", function (event) {
   const gate = event.target.closest('[data-action="reveal-embed"]');
@@ -1372,7 +1444,7 @@ wireAuth();
 syncAccount();
 applyTheme(savedTheme());
 wirePlayer();
-wireVidLink();
+wirePlayer();
 wireRails();
 wireBar();
 wireBillboard();

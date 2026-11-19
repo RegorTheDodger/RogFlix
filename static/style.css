@@ -1456,6 +1456,44 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
   background: rgba(0, 0, 0, .35);
 }
 
+/* The players a title is offered on. One is on; the others are the fallback
+   when a service is missing the film or falls over mid-way. */
+.sources {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sources-label {
+  margin-right: 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.source-btn {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--paper-dim);
+  font: 500 12px/1 var(--font-ui);
+  cursor: pointer;
+  transition: color var(--ease), border-color var(--ease),
+    background var(--ease);
+}
+.source-btn:hover {
+  color: var(--paper);
+  border-color: rgba(var(--saffron-rgb), .55);
+}
+.source-btn.on {
+  border-color: var(--saffron);
+  background: var(--saffron);
+  color: #14100c;
+  font-weight: 600;
+}
+
 .watch-meta {
   display: flex;
   align-items: flex-start;
