@@ -406,7 +406,7 @@ def title_page(item, season=1, episode=1, seasons=(), by_season=None):
             '<div class="player-wrap"><div class="player embed">'
             '<iframe id="player" src="%s" data-vidlink="%s" allowfullscreen'
             ' allow="autoplay; fullscreen; encrypted-media; picture-in-picture"'
-            ' referrerpolicy="origin" loading="eager" title="%s on VidLink">'
+            ' loading="eager" title="%s on VidLink">'
             '</iframe>%s</div></div>'
             '<div class="stage-under">'
             '<p class="resume" data-role="resume"></p>'
