@@ -97,9 +97,10 @@ and names the language playing under the player. A film einthusan carries in
 more than one language is a different dub in each, so every index holding it
 becomes a button across the top of the frame: pressing one swaps the stream at
 the same second, and the language playing is marked as the original or a dub.
-The default is the film's original language — Cinemeta records a film's
-country but not its language, so Wikipedia's first sentence is asked once per
-film and kept for a week; when it says nothing, the closest title match plays.
+The default is always the film's original language. Cinemeta records a film's
+country but not its language, so the language field of the film's Wikipedia
+infobox is read once per film and kept for a week; when an article says
+nothing, the closest title match plays.
 Films from anywhere else never see the source, and neither does a series. A
 film einthusan does not have says so in the frame rather than sitting blank.
 
@@ -259,10 +260,12 @@ the small memory of hits and misses that keeps a second visit instant.
 
 **`lib/language.py`** — the language a film was made in. Cinemeta has a film's
 country but not its language, and einthusan's index entries do not say whether
-they are a dub, so this asks Wikipedia's search API — no key, one request — for
-the article whose year and title are the film's and reads the language out of
-its first sentence. A miss costs nothing: the frame then starts on whichever
-index matched the title best, and the language buttons are there either way.
+they are a dub, so this finds the film's Wikipedia article and reads the
+`language` field of its infobox (falling back to the first sentence). The
+year has to be on the page too, so a same-named film cannot lend its language.
+That is asked once per film, kept for a week, and needs no key. A miss costs
+nothing: the frame then starts on whichever index matched the title best, and
+the language buttons are there either way.
 
 **`lib/accounts.py`** — users and sessions. Password hashing (PBKDF2-HMAC-SHA256,
 per-user salt), session token creation and lookup (only the SHA-256 of the token
