@@ -305,7 +305,7 @@
       window.history.back();
       return;
     }
-    window.location.href = "/";
+    window.location.href = "/tv";
   }
 
   function onKey(event) {

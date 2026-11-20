@@ -49,8 +49,20 @@ def create_app():
     app.config["JSON_SORT_KEYS"] = False
 
     def tv_mode():
-        """Set by /tv, so every in-site link stays in the television layout."""
-        return request.cookies.get("rogflix_tv") == "1"
+        """True under /tv, where the ten-foot layout lives.
+
+        The television used to be a cookie that swapped the layout of the main
+        site, which meant one browser could not be both: opening /tv on the sofa
+        rewrote the laptop too. It is its own address now.
+        """
+        path = request.path
+        return path == "/tv" or path.startswith("/tv/")
+
+    def go(path, code=303):
+        """A redirect that keeps a television on its own half of the site."""
+        if tv_mode() and not path.startswith("/tv"):
+            path = "/tv" + ("" if path == "/" else path)
+        return redirect(path, code=code)
 
     def render(name, body):
         return Response(views.page(name, body, tv=tv_mode()),
@@ -93,19 +105,13 @@ def create_app():
         return urlsplit(origin).netloc == request.host
 
     # ---------------------------------------------------------------- home
-    @app.route("/tv")
-    def tv_on():
-        """Switch this browser to the television layout, then land on the shelf."""
-        response = redirect("/", code=303)
-        response.set_cookie(
-            "rogflix_tv", "1", max_age=60 * 60 * 24 * 365,
-            samesite="Lax", secure=secure_cookie(),
-        )
-        return response
-
     @app.route("/tv/off")
     def tv_off():
-        """Back to the mouse layout."""
+        """The old way back out of the television layout.
+
+        Nothing needs it now that /tv is its own address rather than a cookie,
+        but a bookmark made while it was one should still land somewhere sane.
+        """
         response = redirect("/", code=303)
         response.delete_cookie("rogflix_tv")
         return response
@@ -260,7 +266,7 @@ def create_app():
     # old addresses keep working for anything already bookmarked.
     @app.route("/library")
     def library():
-        return redirect("/search?lang=english", code=303)
+        return go("/search?lang=english")
 
     @app.route("/library/search")
     def library_search():
@@ -268,21 +274,21 @@ def create_app():
         target = "/search?lang=english"
         if query:
             target += "&q=" + quote(query)
-        return redirect(target, code=303)
+        return go(target)
 
     @app.route("/title/<kind>/<media_id>")
     def title(kind, media_id):
         kind = "series" if kind == "series" else "movie"
         media_id = (media_id or "").strip()[:40]
         if not re.match(r"^[A-Za-z0-9:]+$", media_id):
-            return redirect("/search", code=303)
+            return go("/search")
 
         try:
             item = stremio.meta(kind, media_id)
         except Exception:
             item = None
         if not item:
-            return redirect("/search", code=303)
+            return go("/search")
 
         season, episode = 1, 1
         seasons, by_season = [], {}
@@ -482,8 +488,26 @@ def create_app():
         return {"ok": True, "groq": bool(os.environ.get("GROQ_API_KEY")),
                 "database": dialect}
 
+    # ------------------------------------------------------- the television twin
+    # Every page also answers under /tv, rendered in the ten-foot layout. Two
+    # addresses rather than a cookie, so a television and a laptop can be open on
+    # the same app at once and neither changes what the other sees.
+    for _rule, _endpoint, _tv_rule in (
+        ("/", "home", "/tv"),
+        ("/search", "search", "/tv/search"),
+        ("/watchlist", "watchlist", "/tv/watchlist"),
+        ("/settings", "settings", "/tv/settings"),
+        ("/title/<kind>/<media_id>", "title", "/tv/title/<kind>/<media_id>"),
+        ("/einthusan/<media_id>", "einthusan_frame",
+         "/tv/einthusan/<media_id>"),
+        ("/library", "library", "/tv/library"),
+        ("/library/search", "library_search", "/tv/library/search"),
+    ):
+        app.add_url_rule(_tv_rule, _endpoint + "__tv",
+                         app.view_functions[_endpoint])
+
     @app.errorhandler(404)
     def not_found(_e):
-        return redirect("/")
+        return go("/")
 
     return app

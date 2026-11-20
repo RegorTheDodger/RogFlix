@@ -121,11 +121,25 @@ NAV_ICONS = {"home": ICON_HOME, "search": ICON_SEARCH, "list": ICON_LIST,
 
 
 
+_TV_LINK = re.compile(r'(href|action)="/(?!static/|api/|tv)')
+
+
+def _tv_links(html):
+    """Send every in-site link to its /tv twin.
+
+    One pass over the finished page instead of an edit to each of the dozens of
+    f-strings that build these pages: the television keeps its own address in the
+    bar and follows it, and a pages built by helpers far apart still agree.
+    """
+    html = html.replace('href="/"', 'href="/tv"')
+    return _TV_LINK.sub(r'\1="/tv/', html)
+
+
 def page(title, body, top_lang="english", tv=False):
     """The shell every page is rendered into.
 
-    ``tv`` adds the ten-foot stylesheet and the remote's focus engine. It is set
-    by the /tv cookie, so every in-site link stays in television mode.
+    ``tv`` adds the ten-foot stylesheet, the remote's focus engine, and points
+    every link at the /tv twin of the current page.
     """
     current = title.lower()
     links = "".join(
@@ -203,6 +217,7 @@ def page(title, body, top_lang="english", tv=False):
     )
 
     if tv:
+        html = _tv_links(html)
         html = (
             html.replace(
                 '<link rel="stylesheet" href="/static/style.css">',
