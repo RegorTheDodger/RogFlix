@@ -24,7 +24,6 @@ from flask import Flask, Response, jsonify, redirect, request
 
 from . import accounts
 from . import einthusan_source
-from . import language
 from . import players
 from . import stremio
 from . import views
@@ -339,24 +338,17 @@ def create_app():
 
         heading = item.get("name") or ""
         year = item.get("year")
-        have = einthusan_source.find(heading, year)
-        original = ""
-        if have and len(have["by_lang"]) > 1:
-            # A film einthusan carries in several languages is a different dub
-            # in each, and the index that matched the title best is as likely
-            # to be one of them as the original. Wikipedia names the language
-            # the film was made in; when einthusan has that index, start there
-            # and let the frame's language buttons offer the rest.
-            original = language.original(heading, year)
-            if original:
-                have = einthusan_source.find(heading, year, prefer=original)
-        if not have:
+        # Einthusan files a dub under an index of its own, and the index that
+        # matched the title best is as often a dub as the original. The frame
+        # plays the language the film was made in — the original index when
+        # einthusan has one — and there is nothing to switch in the player.
+        played = einthusan_source.play(heading, year)
+        if not played:
             return jsonify({"error": "Einthusan has no playable copy of this "
                                      "film right now."})
-
-        wanted = (request.args.get("lang") or "").strip().lower()
-        code = wanted if wanted in have["by_lang"] else have["pick"]
-        film = have["by_lang"][code]
+        film = played["record"]
+        code = played["code"]
+        original = played["original"]
         found = einthusan_source.stream(film["id"])
         if not found:
             return jsonify({"error": "Einthusan's copy of this film will not "
@@ -367,11 +359,6 @@ def create_app():
             "language": film.get("lang") or code.title(),
             "language_code": code,
             "original": original,
-            "languages": [{"code": key,
-                           "name": have["by_lang"][key].get("lang")
-                                   or key.title(),
-                           "original": key == original}
-                          for key in have["by_lang"]],
             "title": found.get("title") or heading,
             "expires": found.get("expires") or 0,
         })

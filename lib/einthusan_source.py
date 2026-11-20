@@ -16,7 +16,7 @@ import re
 import threading
 import time
 
-from . import einthusan
+from . import einthusan, language
 
 # einthusan indexes eight Indian languages and carries nothing from outside
 # India, so a film has to be Indian to be there at all.
@@ -117,8 +117,8 @@ def _matches(name, year):
     Every index is asked because Cinemeta says a film is Indian but not which
     of the eight languages it is in, and a dub lives in its own index. Keeping
     each language's best entry — not just the closest overall — is what lets
-    the frame offer the others: a Telugu film that matched in Tamil first is
-    still playable in Telugu when its index has it.
+    play() reach the index a film was made in even when a dub matched the
+    title more closely.
     """
     if not (name or "").strip():
         return None
@@ -192,6 +192,28 @@ def find(name, year, prefer=""):
         pick = max(matches,
                    key=lambda code: _score(name, year_num, matches[code]))
     return {"by_lang": matches, "pick": pick}
+
+
+def play(name, year):
+    """The one record the frame plays for a film, and the language it is in.
+
+    Einthusan files a dub under an index of its own, so a film it carries in
+    more than one language has several records, and the one matching the title
+    best is as often a dub as the original. The frame plays the language the
+    film was made in: the original index is asked of Wikipedia and taken when
+    einthusan has it. A film einthusan carries only as a dub still plays, and
+    the frame's badge says so.
+
+    Returns {"record": item, "code": language code, "original": code or ""},
+    or None when no index has the film.
+    """
+    have = find(name, year)
+    if not have:
+        return None
+    original = language.original(name, year)
+    code = original if original in have["by_lang"] else have["pick"]
+    return {"record": have["by_lang"][code], "code": code,
+            "original": original}
 
 
 def stream(film_id):

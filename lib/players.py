@@ -24,9 +24,8 @@ Einthusan signs an mp4 per viewing instead of publishing an embed URL, so that
 last entry points at a page here (lib/einthusan_source.py resolves the film and
 plays it). It is offered only for films whose country Cinemeta reports as
 Indian: einthusan has no series and nothing from anywhere else, so the button
-is left out rather than opening on an empty frame. It is also off for now
-(OFFER_EINTHUSAN below): the code stays so the source can come back by changing
-one flag.
+is left out rather than opening on an empty frame, and it can be pulled from
+every title page by turning OFFER_EINTHUSAN below back to False.
 
 One title rarely exists on every service, and any of them can fall over
 mid-film, so the page shows the list and lets the viewer pick. The order here
@@ -129,10 +128,9 @@ def _indian_films(kind, country):
     return einthusan_source.offers(kind, country)
 
 
-# Einthusan is switched off while its streams are unreliable: the client, the
-# source logic and the /einthusan route all stay in the tree, and turning this
-# back to True puts the fifth button back on every Indian film.
-OFFER_EINTHUSAN = False
+# Set this to False to take the fifth button off every Indian film while
+# keeping the client, the source logic and the /einthusan route in the tree.
+OFFER_EINTHUSAN = True
 
 # Offered in this order. "resume" is the query parameter the player documents
 # for a start second, or "" when it has none; static/app.js appends it. "gate"

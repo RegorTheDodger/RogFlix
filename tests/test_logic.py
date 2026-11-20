@@ -36,28 +36,29 @@ class Gate(unittest.TestCase):
         self.assertFalse(einthusan_source.offers("series", "India"))
         self.assertFalse(einthusan_source.offers("movie", "Pakistan"))
 
-    def test_source_is_off_for_now(self):
+    def test_source_is_offered_last(self):
         indian = [one["key"] for one in
                   players.sources("movie", "tt8178634", "", country="India")]
-        self.assertNotIn("einthusan", indian)
-        # kept in the tree: the entry is still there, only not offered
-        self.assertIn("einthusan", [one["key"] for one in players.SOURCES])
+        self.assertEqual(indian[-1], "einthusan")
 
-    def test_source_list_is_gated_when_offered(self):
-        players.OFFER_EINTHUSAN = True
+    def test_source_list_is_gated_by_country(self):
+        elsewhere = [one["key"] for one in
+                     players.sources("movie", "tt8178634", "",
+                                     country="Pakistan")]
+        self.assertNotIn("einthusan", elsewhere)
+        show = [one["key"] for one in
+                players.sources("series", "tt0903747", "", 1, 1, "India")]
+        self.assertNotIn("einthusan", show)
+
+    def test_flag_takes_the_button_off(self):
+        players.OFFER_EINTHUSAN = False
         try:
             indian = [one["key"] for one in
-                      players.sources("movie", "tt8178634", "", country="India")]
-            self.assertEqual(indian[-1], "einthusan")
-            elsewhere = [one["key"] for one in
-                         players.sources("movie", "tt8178634", "",
-                                         country="Pakistan")]
-            self.assertNotIn("einthusan", elsewhere)
-            show = [one["key"] for one in
-                    players.sources("series", "tt0903747", "", 1, 1, "India")]
-            self.assertNotIn("einthusan", show)
+                      players.sources("movie", "tt8178634", "",
+                                      country="India")]
+            self.assertNotIn("einthusan", indian)
         finally:
-            players.OFFER_EINTHUSAN = False
+            players.OFFER_EINTHUSAN = True
 
 
 class Matching(unittest.TestCase):
@@ -179,6 +180,39 @@ class LanguageParsing(unittest.TestCase):
         finally:
             language._get = real
             language._cache.clear()
+
+
+class OriginalLanguage(unittest.TestCase):
+    """The frame plays the film's own language, not a dub of it."""
+
+    def setUp(self):
+        self.real_find = einthusan_source.find
+        self.real_original = einthusan_source.language.original
+        einthusan_source.find = lambda name, year, prefer="": {
+            "by_lang": {"tamil": {"id": "t4m1", "lang": "Tamil"},
+                        "telugu": {"id": "t3l2", "lang": "Telugu"}},
+            "pick": "tamil",
+        }
+
+    def tearDown(self):
+        einthusan_source.find = self.real_find
+        einthusan_source.language.original = self.real_original
+
+    def test_the_original_index_is_played(self):
+        einthusan_source.language.original = lambda name, year: "telugu"
+        played = einthusan_source.play("RRR", 2022)
+        self.assertEqual(played["code"], "telugu")
+        self.assertEqual(played["record"]["id"], "t3l2")
+
+    def test_the_only_copy_plays_when_the_original_index_is_missing(self):
+        einthusan_source.language.original = lambda name, year: "hindi"
+        played = einthusan_source.play("RRR", 2022)
+        self.assertEqual(played["code"], "tamil")
+        self.assertEqual(played["original"], "hindi")
+
+    def test_no_index_at_all_plays_nothing(self):
+        einthusan_source.find = lambda name, year, prefer="": None
+        self.assertIsNone(einthusan_source.play("Nothing", 2020))
 
 
 class Merge(unittest.TestCase):

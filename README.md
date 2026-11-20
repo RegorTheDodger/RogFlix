@@ -12,10 +12,10 @@
 RogFlix puts everything the big streaming services are carrying on one shelf.
 It reads the Streaming Catalogs addon — 35 services, films and series — paints a
 home page of service-by-service rows, and plays any title through one of four
-players — CineSrc, VidLink, VidSrc.sh and VidSrc.mov — picked under the frame. A
-fifth, einthusan, is kept in the code but switched off for now (see
-[Einthusan](#einthusan)). Search, My List, continue watching and an account that
-merges those shelves between devices are all included.
+players — CineSrc, VidLink, VidSrc.sh and VidSrc.mov — picked under the frame,
+plus einthusan for Indian films (see [Einthusan](#einthusan)). Search, My List,
+continue watching and an account that merges those shelves between devices are
+all included.
 
 The app is Flask with server-rendered HTML, a small vanilla-JavaScript layer for
 the rails, the player bridge and the local-first list, and Postgres (or SQLite
@@ -89,25 +89,21 @@ is the source in use, and a series on VidLink shows the player's own
 next-episode button near the end of an episode. VidSrc.mov reports nothing, so a
 film watched through it does not move continue watching.
 
-**Einthusan.** Switched off for now: `OFFER_EINTHUSAN` in `lib/players.py` is
-`False`, so no title page offers the button, and the client, the source logic
-and the `/einthusan` routes stay in the tree so it can come back by flipping
-that one flag. While it was on, Indian films got a fifth source: einthusan,
-which has no embed
+**Einthusan.** Indian films get a fifth source: einthusan, which has no embed
 URL of its own and signs an mp4 per viewing instead — it indexes eight Indian
 languages and carries nothing from outside India. So that button points
 at a page here: it searches einthusan's eight language indexes for the film by
 title and year, plays what it finds in the frame with the site's own resume,
 and names the language playing under the player. A film einthusan carries in
-more than one language is a different dub in each, so every index holding it
-becomes a button across the top of the frame: pressing one swaps the stream at
-the same second, and the language playing is marked as the original or a dub.
-The default is always the film's original language. Cinemeta records a film's
-country but not its language, so the language field of the film's Wikipedia
-infobox is read once per film and kept for a week; when an article says
-nothing, the closest title match plays. The scan runs when the frame asks for
-the film, and its answer is kept in memory for a few hours, so switching
-languages or reopening the same film does not read the indexes again.
+more than one language is a different dub in each, so the frame pins itself to
+the index the film was made in and offers nothing to switch: the language
+playing is marked as the original, or as a dub when einthusan carries no index
+in the film's own language. Cinemeta records a film's country but not its
+language, so the language field of the film's Wikipedia infobox is read once
+per film and kept for a week; when an article says nothing, the closest title
+match plays. The scan runs when the frame asks for the film, and its answer is
+kept in memory for a few hours, so reopening the same film does not read the
+indexes again.
 Films from anywhere else never see the source, and neither does a series. A
 film einthusan does not have says so in the frame rather than sitting blank.
 
@@ -253,8 +249,8 @@ optional season/episode into one URL per service — CineSrc, VidLink, VidSrc.sh
 VidSrc.mov, einthusan — in the order the page offers them,
 adding the accent colour where a player accepts one, the next-episode button on
 a VidLink series, and the query parameter each one takes for a start second.
-Einthusan is gated twice: it is offered only for films Cinemeta lists as Indian,
-and only while `OFFER_EINTHUSAN` is on.
+Einthusan is gated by `OFFER_EINTHUSAN`, and by country: it is offered only for
+films Cinemeta lists as Indian.
 
 **`lib/einthusan.py`** — the einthusan client, taken from the EinthuFlix app.
 It reads the eight language indexes, searches them (with a shorter-prefix
@@ -265,8 +261,9 @@ knows einthusan's HTML.
 **`lib/einthusan_source.py`** — the fifth source's own logic, and the only file
 that decides whether it is offered: the India-only country check, the search
 across every language index, the title-and-year match that keeps the best entry
-per language (so the frame can offer them all and start on the original), and
-the small memory of hits and misses that keeps a second visit instant.
+per language, the choice of the film's original-language index as the one the
+frame plays, and the small memory of hits and misses that keeps a second visit
+instant.
 
 **`lib/language.py`** — the language a film was made in. Cinemeta has a film's
 country but not its language, and einthusan's index entries do not say whether
@@ -274,8 +271,7 @@ they are a dub, so this finds the film's Wikipedia article and reads the
 `language` field of its infobox (falling back to the first sentence). The
 year has to be on the page too, so a same-named film cannot lend its language.
 That is asked once per film, kept for a week, and needs no key. A miss costs
-nothing: the frame then starts on whichever index matched the title best, and
-the language buttons are there either way.
+nothing: the frame then plays whichever index matched the title best.
 
 **`lib/accounts.py`** — users and sessions. Password hashing (PBKDF2-HMAC-SHA256,
 per-user salt), session token creation and lookup (only the SHA-256 of the token
@@ -417,9 +413,9 @@ refused; `ROGFLIX_ALLOW_SIGNUP=open` opens it up (see
   2h 58m."
 - When a player reports the end, an Up next row appears under the frame: the
   next episode, and a dozen titles from the same genres.
-- In the einthusan frame, the language buttons switch the copy at the same
-  second; the choice is remembered for that film, and the address keeps it, so a
-  reload or a shared link plays the same language.
+- In the einthusan frame, a film plays in the language it was made in. A dub
+  einthusan files in another index is never the one chosen, and there is no
+  switcher in the player.
 - Watch ten seconds and the title appears under Continue watching.
 - In `/settings`, under **Home page rows**, untick a row or move it with the
   arrows; the home page follows on the next load.
@@ -460,11 +456,11 @@ The tables are created on first use; there is no migration step.
 - Every source is third-party. When one is missing a title, or its own
   sources fail, switch source under the frame — this app cannot fix their
   bundles, and only CineSrc, VidLink and VidSrc.sh report progress back to it.
-- Einthusan has one entry per language. A film it carries in several starts on
-  the original when Wikipedia names it, and the other indexes are buttons across
-  the frame; a dub with no button is one einthusan does not carry. Its signed
-  links expire after six hours, which the frame recovers from on its own by
-  asking for a new link and resuming at the same second.
+- Einthusan has one entry per language. A film it carries in several plays in
+  the original when Wikipedia names it, and in the closest index when it does
+  not; a dub plays only when it is the one copy einthusan has, and the badge
+  says so. Its signed links expire after six hours, which the frame recovers
+  from on its own by asking for a new link and resuming at the same second.
 - A title Cinemeta has no TMDB id for has no player, and the page says so
   instead of showing an empty frame.
 - Season 0 (specials) is listed but not playable.
