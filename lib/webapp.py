@@ -73,7 +73,7 @@ def create_app():
 
     def auth_response(payload, status=200):
         if not request.is_json:
-            return redirect("/settings", code=303)
+            return go("/settings")
         return jsonify(payload), status
 
     def require_user():
@@ -189,7 +189,7 @@ def create_app():
                                    httponly=True, samesite="Lax",
                                    secure=secure_cookie())
         else:
-            response = redirect("/settings", code=303)
+            response = go("/settings")
             response.set_cookie(SESSION_COOKIE, token, max_age=accounts.SESSION_DAYS * 86400,
                                 httponly=True, samesite="Lax",
                                 secure=secure_cookie())
@@ -213,7 +213,7 @@ def create_app():
                                    httponly=True, samesite="Lax",
                                    secure=secure_cookie())
         else:
-            response = redirect("/settings", code=303)
+            response = go("/settings")
             response.set_cookie(SESSION_COOKIE, token, max_age=accounts.SESSION_DAYS * 86400,
                                 httponly=True, samesite="Lax",
                                 secure=secure_cookie())
@@ -502,9 +502,23 @@ def create_app():
          "/tv/einthusan/<media_id>"),
         ("/library", "library", "/tv/library"),
         ("/library/search", "library_search", "/tv/library/search"),
+        # The sign-in forms live on the settings page, and a television has to be
+        # answered in the television: posting to the plain /auth route gives the
+        # server no way to know which half of the site asked.
+        ("/auth/login", "auth_login", "/tv/auth/login"),
+        ("/auth/register", "auth_register", "/tv/auth/register"),
+        ("/auth/logout", "auth_logout", "/tv/auth/logout"),
+        ("/auth/me", "auth_me", "/tv/auth/me"),
     ):
+        # The twin has to accept what the original accepts: a sign-in form posts,
+        # and a route registered for GET alone answers those with a 405.
+        _methods = next(
+            (sorted(rule.methods - {"HEAD", "OPTIONS"})
+             for rule in app.url_map.iter_rules() if str(rule) == _rule),
+            ["GET"],
+        )
         app.add_url_rule(_tv_rule, _endpoint + "__tv",
-                         app.view_functions[_endpoint])
+                         app.view_functions[_endpoint], methods=_methods)
 
     @app.errorhandler(404)
     def not_found(_e):

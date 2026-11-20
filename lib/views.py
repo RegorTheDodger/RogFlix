@@ -139,7 +139,8 @@ def page(title, body, top_lang="english", tv=False):
     """The shell every page is rendered into.
 
     ``tv`` adds the ten-foot stylesheet, the remote's focus engine, and points
-    every link at the /tv twin of the current page.
+    every page link at the /tv twin of the current page, including the sign-in
+    forms, which is why those endpoints answer under /tv too.
     """
     current = title.lower()
     links = "".join(

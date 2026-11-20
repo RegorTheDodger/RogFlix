@@ -21,6 +21,22 @@ const LS_REMOVED = "iml:removed";
 const LS_DROPPED = "iml:dropped";
 const PREFS_AT = "iml:prefs-at";
 
+/*
+ * A television lives under /tv, and every link this file builds has to stay
+ * there: a resume card kept in localStorage from yesterday, or a row added by
+ * the up-next fetch, would otherwise point at the pointer site and drop the
+ * viewer out of the ten-foot layout mid-browse.
+ */
+const TV_PREFIX = /^\/tv(\/|$)/.test(location.pathname) ? "/tv" : "";
+
+function sitePath(path) {
+  if (typeof path !== "string" || path.charAt(0) !== "/") return path;
+  if (!TV_PREFIX || path === "/tv" || path.indexOf("/tv/") === 0) return path;
+  if (path.indexOf("/static/") === 0 || path.indexOf("/api/") === 0 ||
+      path.indexOf("/auth/") === 0) return path;
+  return TV_PREFIX + path;
+}
+
 /* A film is finished when the player reports the last couple of minutes,
  * not when it passes a fraction of the duration. These streams often claim a
  * shorter runtime than the film itself, and 95% of that short number can be
@@ -124,7 +140,7 @@ function normaliseList() {
     seen.add(id);
     if (ep) {
       changed = true;
-      const href = "/title/series/" + ep.series;
+      const href = sitePath("/title/series/" + ep.series);
       out.push(Object.assign({}, m, { id: id, url: href, href: href }));
     } else {
       out.push(m);
@@ -146,7 +162,7 @@ function remember(item) {
     id: item.id,
     title: item.title || prev.title || item.id,
     cover: item.cover || prev.cover || "",
-    url: item.url || prev.url || "/watch/" + item.id,
+    url: sitePath(item.url || prev.url || "/watch/" + item.id),
     href: item.href || prev.href || "",
     year: item.year || prev.year || "",
     lang: item.lang || prev.lang || ""
@@ -296,7 +312,7 @@ function continueWatching() {
       const meta = Object.assign({}, cat[id] || {}, entry.meta || {});
       if (!meta.id) meta.id = id;
       if (!meta.title) return null;
-      if (!meta.url) meta.url = "/watch/" + id;
+      if (!meta.url) meta.url = sitePath("/watch/" + id);
       meta.frac = entry.duration ? entry.seconds / entry.duration : 0;
       meta.left = entry.duration ? entry.duration - entry.seconds : null;
       meta.seconds = entry.seconds || 0;
@@ -354,7 +370,8 @@ function episodeHref(m) {
   // would otherwise start at S01E01.
   const ep = episodeParts(m);
   return ep
-    ? "/title/series/" + ep.series + "?s=" + ep.season + "&e=" + ep.episode
+    ? sitePath("/title/series/" + ep.series +
+                "?s=" + ep.season + "&e=" + ep.episode)
     : "";
 }
 
@@ -363,15 +380,15 @@ function watchHref(m) {
   // an einthusan film still has only its watch route.
   const episode = episodeHref(m);
   if (episode) return episode;
-  if (m.href && m.href.charAt(0) === "/") return m.href;
-  if (m.url && m.url.charAt(0) === "/") return m.url;
+  if (m.href && m.href.charAt(0) === "/") return sitePath(m.href);
+  if (m.url && m.url.charAt(0) === "/") return sitePath(m.url);
   const q = new URLSearchParams({
     t: m.title || "",
     c: m.cover || "",
     y: m.year || "",
     l: m.lang || ""
   });
-  return "/watch/" + m.id + "?" + q.toString();
+  return sitePath("/watch/" + m.id + "?" + q.toString());
 }
 
 function cardHtml(m) {
@@ -993,8 +1010,8 @@ function wirePlayer() {
           if (!one || !one.id) return;
           const card = document.createElement("a");
           card.className = "up-next-card";
-          card.href = "/title/" + (one.type === "series" ? "series" : "movie") +
-            "/" + one.id;
+          card.href = sitePath("/title/" +
+            (one.type === "series" ? "series" : "movie") + "/" + one.id);
           if (one.poster) {
             const img = document.createElement("img");
             img.loading = "lazy";
