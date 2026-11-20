@@ -169,7 +169,11 @@
   function reveal(el) {
     var r = rect(el);
     var vh = window.innerHeight || 1080;
-    if (r.top < 96 || r.bottom > vh - 48) {
+    /* The nav is fixed to the top of the screen, so the usual clearance for it
+     * would scroll the page every time the ring reached it, lifting the row back
+     * above the header for the next Up. */
+    var guard = (el.closest && el.closest(".nav")) ? 0 : 96;
+    if (r.top < guard || r.bottom > vh - 48) {
       var top = (window.pageYOffset || window.scrollY || 0) + r.top -
         Math.max(24, (vh - r.height) / 2);
       window.scrollTo(0, Math.max(0, top));
