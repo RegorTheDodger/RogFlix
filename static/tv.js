@@ -126,6 +126,14 @@
       var across;
       var band;
 
+      /* The "+" sits on the poster and would keep Up/Down bouncing inside the
+       * same card instead of climbing to the row above. It stays reachable
+       * sideways. */
+      if (!sideways && from.closest && el.closest) {
+        var here = from.closest(".card");
+        if (here && here === el.closest(".card")) continue;
+      }
+
       if (sideways) {
         forward = direction === "left" ? -dx : dx;
         across = Math.abs(dy);
@@ -148,6 +156,37 @@
     return any;
   }
 
+  /*
+   * Bring a stop into view without asking scrollIntoView to guess. It also
+   * scrolls ancestor scrollers sideways, and with a page this wide the whole
+   * document drifted left until the ring sat off the screen at x=-931 while the
+   * remote was pressing Right. Vertically the page moves, horizontally only the
+   * row under the ring does.
+   */
+  function reveal(el) {
+    var r = rect(el);
+    var vh = window.innerHeight || 1080;
+    if (r.top < 96 || r.bottom > vh - 48) {
+      var top = (window.pageYOffset || window.scrollY || 0) + r.top -
+        Math.max(24, (vh - r.height) / 2);
+      window.scrollTo(0, Math.max(0, top));
+    }
+    var box = el.parentElement;
+    while (box && box !== document.body) {
+      var style = window.getComputedStyle(box);
+      if (box.scrollWidth > box.clientWidth + 4 &&
+          (style.overflowX === "auto" || style.overflowX === "scroll")) break;
+      box = box.parentElement;
+    }
+    if (box && box !== document.body) {
+      var br = rect(box);
+      if (r.left < br.left + 8 || r.right > br.right - 8) {
+        box.scrollLeft = box.scrollLeft + (r.left - br.left) -
+          (br.width - r.width) / 2;
+      }
+    }
+  }
+
   function focus(el, keepStill) {
     if (!el) return false;
     // The ring is drawn from an attribute as well as :focus, because :focus only
@@ -161,19 +200,7 @@
     } catch (error) {
       el.focus();
     }
-    if (!keepStill) {
-      var r = rect(el);
-      var tall = (window.innerHeight || 1080) - 48;
-      var wide = (window.innerWidth || 1920) - 16;
-      var offscreen = r.top < 96 || r.bottom > tall;
-      var offside = r.left < 12 || r.right > wide;
-      el.scrollIntoView({
-        block: offscreen ? "center" : "nearest",
-        /* Centring on every step makes a row twitch as it goes; only recentre
-         * when the poster would otherwise sit against the edge. */
-        inline: offside ? "center" : "nearest"
-      });
-    }
+    if (!keepStill) reveal(el);
     return true;
   }
 
@@ -274,6 +301,14 @@
   function onKey(event) {
     var action = KEYCODE[event.keyCode] || KEYNAME[event.key];
     if (!action) return;
+    /*
+     * The rows animate themselves: motion.js listens for arrow keys on the rail
+     * and springs it 85% of its width, which is right for a keyboard and wrong
+     * for a remote, where the ring has already moved exactly one poster. Without
+     * this the row lurched a page on every press and the chosen film slid out of
+     * sight (x=-931). preventDefault alone does not stop a bubbling listener.
+     */
+    event.stopPropagation();
 
     var fieldEl = event.target;
     var field = fieldEl && /^(INPUT|TEXTAREA|SELECT)$/.test(fieldEl.tagName);
