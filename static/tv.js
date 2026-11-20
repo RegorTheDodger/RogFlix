@@ -358,6 +358,10 @@
       focus(firstStop());
       return;
     }
+    /* The top bar is the ceiling: from up there, Up stays put instead of
+     * bouncing back into the page. */
+    if (action === "up" && from.closest && from.closest(".nav")) return;
+
     var next = best(from, action);
     if (next) focus(next);
   }
