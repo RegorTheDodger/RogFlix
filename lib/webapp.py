@@ -48,24 +48,11 @@ def create_app():
     )
     app.config["JSON_SORT_KEYS"] = False
 
-    def tv_mode():
-        """True under /tv, where the ten-foot layout lives.
-
-        The television used to be a cookie that swapped the layout of the main
-        site, which meant one browser could not be both: opening /tv on the sofa
-        rewrote the laptop too. It is its own address now.
-        """
-        path = request.path
-        return path == "/tv" or path.startswith("/tv/")
-
     def go(path, code=303):
-        """A redirect that keeps a television on its own half of the site."""
-        if tv_mode() and not path.startswith("/tv"):
-            path = "/tv" + ("" if path == "/" else path)
         return redirect(path, code=code)
 
     def render(name, body):
-        return Response(views.page(name, body, tv=tv_mode()),
+        return Response(views.page(name, body),
                         mimetype="text/html; charset=utf-8")
 
     def current_user():
@@ -105,17 +92,6 @@ def create_app():
         return urlsplit(origin).netloc == request.host
 
     # ---------------------------------------------------------------- home
-    @app.route("/tv/off")
-    def tv_off():
-        """The old way back out of the television layout.
-
-        Nothing needs it now that /tv is its own address rather than a cookie,
-        but a bookmark made while it was one should still land somewhere sane.
-        """
-        response = redirect("/", code=303)
-        response.delete_cookie("rogflix_tv")
-        return response
-
     @app.route("/")
     def home():
         _name, body, _l = views.home_page()
@@ -516,39 +492,6 @@ def create_app():
             dialect = "unavailable"
         return {"ok": True, "groq": bool(os.environ.get("GROQ_API_KEY")),
                 "database": dialect}
-
-    # ------------------------------------------------------- the television twin
-    # Every page also answers under /tv, rendered in the ten-foot layout. Two
-    # addresses rather than a cookie, so a television and a laptop can be open on
-    # the same app at once and neither changes what the other sees.
-    for _rule, _endpoint, _tv_rule in (
-        ("/", "home", "/tv"),
-        ("/search", "search", "/tv/search"),
-        ("/watchlist", "watchlist", "/tv/watchlist"),
-        ("/settings", "settings", "/tv/settings"),
-        ("/title/<kind>/<media_id>", "title", "/tv/title/<kind>/<media_id>"),
-        ("/watch/<media_id>", "watch", "/tv/watch/<media_id>"),
-        ("/einthusan/<media_id>", "einthusan_frame",
-         "/tv/einthusan/<media_id>"),
-        ("/library", "library", "/tv/library"),
-        ("/library/search", "library_search", "/tv/library/search"),
-        # The sign-in forms live on the settings page, and a television has to be
-        # answered in the television: posting to the plain /auth route gives the
-        # server no way to know which half of the site asked.
-        ("/auth/login", "auth_login", "/tv/auth/login"),
-        ("/auth/register", "auth_register", "/tv/auth/register"),
-        ("/auth/logout", "auth_logout", "/tv/auth/logout"),
-        ("/auth/me", "auth_me", "/tv/auth/me"),
-    ):
-        # The twin has to accept what the original accepts: a sign-in form posts,
-        # and a route registered for GET alone answers those with a 405.
-        _methods = next(
-            (sorted(rule.methods - {"HEAD", "OPTIONS"})
-             for rule in app.url_map.iter_rules() if str(rule) == _rule),
-            ["GET"],
-        )
-        app.add_url_rule(_tv_rule, _endpoint + "__tv",
-                         app.view_functions[_endpoint], methods=_methods)
 
     @app.errorhandler(404)
     def not_found(_e):

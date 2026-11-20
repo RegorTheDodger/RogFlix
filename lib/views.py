@@ -121,27 +121,8 @@ NAV_ICONS = {"home": ICON_HOME, "search": ICON_SEARCH, "list": ICON_LIST,
 
 
 
-_TV_LINK = re.compile(r'(href|action)="/(?!static/|api/|tv)')
-
-
-def _tv_links(html):
-    """Send every in-site link to its /tv twin.
-
-    One pass over the finished page instead of an edit to each of the dozens of
-    f-strings that build these pages: the television keeps its own address in the
-    bar and follows it, and a pages built by helpers far apart still agree.
-    """
-    html = html.replace('href="/"', 'href="/tv"')
-    return _TV_LINK.sub(r'\1="/tv/', html)
-
-
-def page(title, body, top_lang="english", tv=False):
-    """The shell every page is rendered into.
-
-    ``tv`` adds the ten-foot stylesheet, the remote's focus engine, and points
-    every page link at the /tv twin of the current page, including the sign-in
-    forms, which is why those endpoints answer under /tv too.
-    """
+def page(title, body, top_lang="english"):
+    """The shell every page is rendered into."""
     current = title.lower()
     links = "".join(
         '<a class="nav-link%s" href="%s">%s<span>%s</span></a>'
@@ -211,23 +192,11 @@ def page(title, body, top_lang="english", tv=False):
         "</div></header>"
         '<main class="page" data-lang="en">%s</main>'
         '<script src="/static/motion.js"></script>'
-        '<script src="/static/app.js?v=3"></script>'
+        '<script src="/static/app.js?v=4"></script>'
         "</body></html>"
         % (shown, origin(), shown, links, ICON_SEARCH, ICON_SEARCH, ICON_GEAR,
            body)
     )
-
-    if tv:
-        html = _tv_links(html)
-        html = (
-            html.replace(
-                '<link rel="stylesheet" href="/static/style.css">',
-                '<link rel="stylesheet" href="/static/style.css">'
-                '<link rel="stylesheet" href="/static/tv.css">')
-            .replace('</head><body>', '</head><body class="tv-mode">')
-            .replace('</body></html>',
-                     '<script src="/static/tv.js?v=5"></script></body></html>')
-        )
 
     return html
 
