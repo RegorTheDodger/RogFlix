@@ -121,7 +121,12 @@ NAV_ICONS = {"home": ICON_HOME, "search": ICON_SEARCH, "list": ICON_LIST,
 
 
 
-def page(title, body, top_lang="english"):
+def page(title, body, top_lang="english", tv=False):
+    """The shell every page is rendered into.
+
+    ``tv`` adds the ten-foot stylesheet and the remote's focus engine. It is set
+    by the /tv cookie, so every in-site link stays in television mode.
+    """
     current = title.lower()
     links = "".join(
         '<a class="nav-link%s" href="%s">%s<span>%s</span></a>'
@@ -135,7 +140,7 @@ def page(title, body, top_lang="english"):
     shown = ("RogFlix &middot; Every service, one shelf"
              if current == "home" else "%s &middot; RogFlix" % esc(title))
 
-    return (
+    html = (
         '<!DOCTYPE html>'
         '<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1,"'
@@ -196,6 +201,19 @@ def page(title, body, top_lang="english"):
         % (shown, origin(), shown, links, ICON_SEARCH, ICON_SEARCH, ICON_GEAR,
            body)
     )
+
+    if tv:
+        html = (
+            html.replace(
+                '<link rel="stylesheet" href="/static/style.css">',
+                '<link rel="stylesheet" href="/static/style.css">'
+                '<link rel="stylesheet" href="/static/tv.css">')
+            .replace('</head><body>', '</head><body class="tv-mode">')
+            .replace('</body></html>',
+                     '<script src="/static/tv.js"></script></body></html>')
+        )
+
+    return html
 
 
 # --------------------------------------------------------------------------

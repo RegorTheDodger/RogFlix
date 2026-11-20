@@ -514,8 +514,11 @@ function wireBillboard() {
   const bar = carousel.querySelector("[data-bb-progress] i");
   const pauseBtn = carousel.querySelector("[data-bb-pause]");
   /* someone who asked the system for less motion should not be handed a
-   * carousel that moves by itself: it starts stopped, and Play starts it */
-  let paused = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+   * carousel that moves by itself: it starts stopped, and Play starts it.
+   * A television is the other case: the ring is sitting on a poster, and a
+   * slide that changes under it scrolls the page away from the remote. */
+  let paused = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    document.body.classList.contains("tv-mode");
   let at = 0;
   let timer = 0;
 

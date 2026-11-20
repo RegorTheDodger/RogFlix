@@ -48,8 +48,13 @@ def create_app():
     )
     app.config["JSON_SORT_KEYS"] = False
 
+    def tv_mode():
+        """Set by /tv, so every in-site link stays in the television layout."""
+        return request.cookies.get("rogflix_tv") == "1"
+
     def render(name, body):
-        return Response(views.page(name, body), mimetype="text/html; charset=utf-8")
+        return Response(views.page(name, body, tv=tv_mode()),
+                        mimetype="text/html; charset=utf-8")
 
     def current_user():
         return accounts.user_for_token(request.cookies.get(SESSION_COOKIE))
@@ -88,6 +93,23 @@ def create_app():
         return urlsplit(origin).netloc == request.host
 
     # ---------------------------------------------------------------- home
+    @app.route("/tv")
+    def tv_on():
+        """Switch this browser to the television layout, then land on the shelf."""
+        response = redirect("/", code=303)
+        response.set_cookie(
+            "rogflix_tv", "1", max_age=60 * 60 * 24 * 365,
+            samesite="Lax", secure=secure_cookie(),
+        )
+        return response
+
+    @app.route("/tv/off")
+    def tv_off():
+        """Back to the mouse layout."""
+        response = redirect("/", code=303)
+        response.delete_cookie("rogflix_tv")
+        return response
+
     @app.route("/")
     def home():
         _name, body, _l = views.home_page()
