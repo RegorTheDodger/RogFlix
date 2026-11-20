@@ -226,7 +226,7 @@ def page(title, body, top_lang="english", tv=False):
                 '<link rel="stylesheet" href="/static/tv.css">')
             .replace('</head><body>', '</head><body class="tv-mode">')
             .replace('</body></html>',
-                     '<script src="/static/tv.js"></script></body></html>')
+                     '<script src="/static/tv.js?v=4"></script></body></html>')
         )
 
     return html
