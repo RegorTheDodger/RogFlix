@@ -18,7 +18,8 @@
     "input:not([type=hidden])",
     "select",
     "textarea",
-    "iframe",
+    /* No iframes: focus inside a cross-origin player frame swallows the remote,
+     * and the Back that would get the viewer out never arrives. */
     "video",
     "[tabindex]:not([tabindex='-1'])"
   ].join(",");
@@ -240,36 +241,34 @@
 
   /* ----------------------------------------------------------------- player */
 
-  function playerTarget() {
-    return document.querySelector(".player iframe") ||
-      document.querySelector(".player video") ||
-      document.querySelector("iframe[data-player]") ||
-      null;
+  function playerBox() {
+    return document.querySelector(".player");
   }
 
-  function insidePlayer(el) {
-    return !!(el && el.closest && el.closest(".player"));
-  }
-
+  /*
+   * The film itself lives in someone else's iframe. Focus goes to the frame
+   * around it, which this page owns, because a focus inside the frame is a
+   * focus the remote can never leave: the keys are delivered there, so Back
+   * stops working and the viewer is stuck in a black rectangle.
+   */
   function enterPlayer() {
-    var target = playerTarget();
-    if (!target) return false;
-    if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "0");
-    playerEl = target;
+    var box = playerBox();
+    if (!box) return false;
+    if (!box.hasAttribute("tabindex")) box.setAttribute("tabindex", "-1");
+    playerEl = box;
     playerMode = true;
-    focus(target, true);
-    showHint("Arrows play the film \u00b7 BACK returns");
+    focus(box, true);
+    showHint("Arrows or BACK leave the film");
     return true;
   }
 
   function leavePlayer() {
     playerMode = false;
     hideHint();
-    var back = playerEl;
+    var box = playerEl;
     playerEl = null;
-    if (back && back.closest) {
-      var gate = back.closest(".player");
-      var stop = (gate && gate.querySelector("button, a[href]")) || firstStop();
+    if (box) {
+      var stop = box.querySelector("button:not(.gate), a[href]") || firstStop();
       focus(stop);
       return;
     }
@@ -284,12 +283,16 @@
       focus(firstStop());
       return;
     }
-    if (insidePlayer(el) || el === playerEl) {
-      enterPlayer();
+    if (playerMode && el === playerEl) {
+      hideHint();
+      playerMode = false;
       return;
     }
     if (typeof el.click === "function") {
       el.click();
+      /* The poster gate is what starts a film: press it, then take the remote
+       * into the player so Back is the way out rather than the frame's own. */
+      if (el.classList && el.classList.contains("gate")) enterPlayer();
     }
   }
 
@@ -350,7 +353,9 @@
      * escape the box — otherwise the search results under the field can never
      * be reached with a remote. */
     if (field && (action === "left" || action === "right")) return;
-    if (playerMode) return;           /* the frame owns them now */
+    /* The film has the screen, but an arrow is still a request to browse: leave
+     * the player and carry on from where it sits, rather than swallowing it. */
+    if (playerMode) leavePlayer();
 
     event.preventDefault();
     var from = document.activeElement;
