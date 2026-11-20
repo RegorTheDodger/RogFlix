@@ -73,6 +73,9 @@
     if (!el || el.disabled) return false;
     if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
     if (el.closest && el.closest("[hidden]")) return false;
+    /* The row is never a stop, a poster is. An empty row ("Nothing saved yet")
+     * otherwise collected the ring as one long bar with nothing to press. */
+    if (el.classList && el.classList.contains("rail")) return false;
     /* The rails carry tabindex=0 so a keyboard can scroll them; landing the ring
      * on the row itself hid every poster behind an invisible outline. */
     if (el.getAttribute && el.getAttribute("tabindex") !== null &&
