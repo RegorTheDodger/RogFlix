@@ -24,8 +24,14 @@
     "[tabindex]:not([tabindex='-1'])"
   ].join(",");
 
+  /* 13 is the desktop Enter; 23 and 66 are what Android TV remotes send for the
+   * centre button, and 461 is Tizen's Back. Without those three a television
+   * appeared to ignore the remote completely. */
   var KEYCODE = {
     13: "ok",
+    23: "ok",
+    66: "ok",
+    461: "back",
     37: "left",
     38: "up",
     39: "right",
