@@ -26,9 +26,13 @@ locally) for accounts. No build step, no client-side framework.
 > **<https://rogflix.vercel.app>** is the project, ready to use — no install,
 > no database, no environment variables. The install steps below are for
 > running it locally when you want to change the code.
+>
+> On a phone or a recent Mac the app is the better way in — see
+> [The apps](#the-apps).
 
 ## Table of contents
 
+- [The apps](#the-apps)
 - [What it does](#what-it-does)
 - [How the site works](#how-the-site-works)
 - [How sync works](#how-sync-works)
@@ -41,6 +45,45 @@ locally) for accounts. No build step, no client-side framework.
 - [Contributing](#contributing)
 - [Authors](#authors)
 - [License](#license)
+
+## The apps
+
+RogFlix also ships as a real app for Android and macOS, and that is the way to
+recommend it: **[download the latest release](https://github.com/RegorTheDodger/RogFlix/releases/latest)**
+(`RogFlix-1.0.0-android.apk` and `RogFlix-1.0.0-macos-arm64.dmg`). Both are thin
+shells around the live site, so the catalogue, players, watchlist, search and
+`/api/sync` are the same ones described below — the app is only a better window
+around them, and it stays current because every Vercel deploy is inside it on the
+next launch.
+
+|  | App | Website |
+| --- | --- | --- |
+| Opening it | one tap: home screen or Applications | a bookmark, or the URL |
+| Window | its own — no address bar, no tabs | browser chrome around the film |
+| Going back | Android back walks history, then leaves; ⌘[ / ⌘] on macOS | browser back |
+| Video | Android fullscreen goes landscape and keeps the screen awake | browser fullscreen |
+| Popups and ad redirects | refused — it cannot be navigated off `rogflix.vercel.app` | an ad can take the tab |
+| Tabs, extensions, a password manager, sharing links | none | all of it |
+| Runs on | Android 7+ and Apple Silicon macOS | any browser |
+
+**Install on Android.** Copy the APK to the phone and open it (allow "install
+unknown apps" for whichever app opens the file), or with the phone connected:
+
+```bash
+adb install -r RogFlix-1.0.0-android.apk
+```
+
+It is signed with the RogFlix release key, so later builds install over it.
+
+**Install on macOS.** Open the DMG and drag **RogFlix** into Applications. It is
+ad-hoc signed but not notarised, so the first launch may need right-click →
+**Open**.
+
+The website is still the right answer for an Intel Mac, Windows, Linux, an older
+Android phone, or anyone who would rather not sideload anything — and "Add to
+Home Screen" gives most of the app's feel with no download at all. One thing to
+know about the apps: the *"Open in a new tab if this one will not play"* link on a
+title page does nothing there, because popups are refused.
 
 ## What it does
 
