@@ -64,7 +64,7 @@ next launch.
 | Video | Android fullscreen goes landscape and keeps the screen awake | browser fullscreen |
 | Popups and ad redirects | refused — it cannot be navigated off `rogflix.vercel.app` | an ad can take the tab |
 | Tabs, extensions, a password manager, sharing links | none | all of it |
-| Runs on | Android 7+ and Apple Silicon macOS | any browser |
+| Runs on | Android 7+, Apple Silicon macOS, plus untested Windows/Linux builds | any browser |
 
 **Install on Android.** Copy the APK to the phone and open it (allow "install
 unknown apps" for whichever app opens the file), or with the phone connected:
@@ -79,9 +79,13 @@ It is signed with the RogFlix release key, so later builds install over it.
 ad-hoc signed but not notarised, so the first launch may need right-click →
 **Open**.
 
-The website is still the right answer for an Intel Mac, Windows, Linux, an older
-Android phone, or anyone who would rather not sideload anything — and "Add to
-Home Screen" gives most of the app's feel with no download at all. One thing to
+**Windows and Linux.** There are x64 builds too — an installer and an AppImage — in
+a separate release marked *untested*: they were cross-built on a Mac and have never
+been launched on either system.
+
+The website is still the right answer for an Intel Mac, an older Android phone, or
+anyone who would rather not sideload an installer — and "Add to Home Screen" gives
+most of the app's feel with no download at all. One thing to
 know about the apps: the *"Open in a new tab if this one will not play"* link on a
 title page does nothing there, because popups are refused.
 
