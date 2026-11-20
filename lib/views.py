@@ -138,7 +138,8 @@ def page(title, body, top_lang="english"):
     return (
         '<!DOCTYPE html>'
         '<html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1,"'
+        'viewport-fit=cover">'
         '<meta name="color-scheme" content="dark">'
         '<meta name="theme-color" content="#0a0809">'
         '<script>try{document.documentElement.setAttribute("data-theme",'
@@ -155,6 +156,12 @@ def page(title, body, top_lang="english"):
         ' type="image/png">'
         '<link rel="apple-touch-icon" href="/static/logo-180.png">'
         '<link rel="manifest" href="/static/manifest.json">'
+        # installed to a home screen or dock, the page owns the whole window
+        '<meta name="mobile-web-app-capable" content="yes">'
+        '<meta name="apple-mobile-web-app-capable" content="yes">'
+        '<meta name="apple-mobile-web-app-status-bar-style"'
+        ' content="black-translucent">'
+        '<meta name="apple-mobile-web-app-title" content="RogFlix">'
         '<meta name="application-name" content="RogFlix">'
         '<meta property="og:site_name" content="RogFlix">'
         '<meta property="og:title" content="%s">'
@@ -177,13 +184,17 @@ def page(title, body, top_lang="english"):
         '<input type="search" name="q" placeholder="Search films and shows"'
         ' autocomplete="off" aria-label="Search films"></span>'
         "</form>"
+        # Phones hide the header field to keep the row short, so search needs a
+        # door of its own there — one tap target instead of a cramped input.
+        '<a class="nav-searchtap" href="/search" aria-label="Search films">%s</a>'
         '<a class="nav-gear" href="/settings" aria-label="Settings">%s</a>'
         "</div></header>"
         '<main class="page" data-lang="en">%s</main>'
         '<script src="/static/motion.js"></script>'
         '<script src="/static/app.js?v=3"></script>'
         "</body></html>"
-        % (shown, origin(), shown, links, ICON_SEARCH, ICON_GEAR, body)
+        % (shown, origin(), shown, links, ICON_SEARCH, ICON_SEARCH, ICON_GEAR,
+           body)
     )
 
 

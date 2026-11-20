@@ -408,6 +408,20 @@ select option { background: var(--ink-2); color: var(--paper); }
   transform: rotate(35deg);
 }
 
+/* The phone door to /search — the header field is hidden below 640px. */
+.nav-searchtap {
+  display: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  border-radius: 50%;
+  color: var(--paper-dim);
+  transition: color var(--ease);
+}
+.nav-searchtap svg { width: 17px; height: 17px; }
+.nav-searchtap:hover { color: var(--paper); }
+
 /* -------------------------------------------------------------------- page */
 
 .page {
@@ -2034,6 +2048,7 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
 
 @media (max-width: 640px) {
   .nav-search { display: none; }
+  .nav-searchtap { display: grid; }
   .brand-word { font-size: 20px; }
   .card { flex-basis: 43vw; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2054,6 +2069,32 @@ html[data-theme="slate"] { --saffron: #96a4b4; --saffron-deep: #626e7d; --saffro
   .rail-btn { display: none; }
   .card-poster:hover { transform: none; }
   .card-poster:hover img { transform: none; }
+}
+
+/* Touch: a fingertip needs about 44px, and iOS zooms the whole page when a
+ * focused field is set below 16px — both get pinned rather than inherited. */
+@media (pointer: coarse) {
+  .nav-link,
+  .nav-gear,
+  .nav-searchtap { min-width: 44px; min-height: 44px; }
+  .nav-field input,
+  .search-field input,
+  .sf-input input,
+  .auth-form input,
+  .dwell-field input { font-size: 16px; }
+}
+
+/* Installed to a home screen or a dock, or a phone held sideways, the system
+ * draws over the page edges. Keep the type inside the safe box. */
+@supports (padding: env(safe-area-inset-left)) {
+  .nav-inner,
+  .page-head {
+    padding-left: max(var(--gutter), env(safe-area-inset-left));
+    padding-right: max(var(--gutter), env(safe-area-inset-right));
+  }
+  .page {
+    padding-bottom: calc(clamp(40px, 6vw, 80px) + env(safe-area-inset-bottom));
+  }
 }
 
 /* ------------------------------------------------------------------- motion */
