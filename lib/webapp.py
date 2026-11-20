@@ -276,6 +276,35 @@ def create_app():
             target += "&q=" + quote(query)
         return go(target)
 
+    @app.route("/watch/<media_id>")
+    def watch(media_id):
+        """Where an id-only link used to land.
+
+        Resume entries and bookmarks saved before title pages remember nothing
+        but an id, and this address had no page behind it: it answered with the
+        not-found redirect, so a film you were in the middle of dropped you on
+        the home page. The id is enough to find the shelf it lives on.
+        """
+        media_id = (media_id or "").strip()[:40]
+        if not re.match(r"^[A-Za-z0-9:]+$", media_id):
+            return go("/search")
+        # The metadata answers for any kind it is asked, so the shelf cannot be
+        # read off the reply's own label. Episodes are the difference: only a
+        # show has them, and a film asked as a show comes back with none.
+        try:
+            show = stremio.meta("series", media_id) or {}
+        except Exception:
+            show = {}
+        if show.get("videos"):
+            return go("/title/series/" + media_id)
+        try:
+            film = stremio.meta("movie", media_id) or {}
+        except Exception:
+            film = {}
+        if film.get("name"):
+            return go("/title/movie/" + media_id)
+        return go("/search")
+
     @app.route("/title/<kind>/<media_id>")
     def title(kind, media_id):
         kind = "series" if kind == "series" else "movie"
@@ -498,6 +527,7 @@ def create_app():
         ("/watchlist", "watchlist", "/tv/watchlist"),
         ("/settings", "settings", "/tv/settings"),
         ("/title/<kind>/<media_id>", "title", "/tv/title/<kind>/<media_id>"),
+        ("/watch/<media_id>", "watch", "/tv/watch/<media_id>"),
         ("/einthusan/<media_id>", "einthusan_frame",
          "/tv/einthusan/<media_id>"),
         ("/library", "library", "/tv/library"),
